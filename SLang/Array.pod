@@ -69,8 +69,7 @@ following arrays:
 
 Note that this does B<not> match the way that
 PDL represents array (which considers this
-to be a C<2x3> array). As warned in earlier versions
-this is a problem now that piddles are supported.
+to be a C<2x3> array).
 Please see the L<"Issues with the PDL support">
 section below.
 
@@ -132,6 +131,9 @@ As an example,
 
 is guaranteed not to be liked by the code; on my machine
 it dislikes it so much that it causes a B<segmentation fault>.
+Even if we were to loop through every element, checking
+the dimensionality of the array, it is not clear how this
+array should be represented in S-Lang.
 
 =head3 How can I help?
 
@@ -236,8 +238,8 @@ L<Inline::SLang>.
   # use a piddle (assumes Inline::SLang::sl_have_pdl() == 1)
   sl_array2perl(2);
   my $a2 = get_array();
-  print "Array returned as an " . ref($a1) . "\n";
-  print "  dim size = " . $a2->getdims(0) . "\n";
+  print "Array returned as an " . ref($a2) . "\n";
+  print "  dim size = " . $a2->dims(0) . "\n";
   print "  type     = " . $a2->type . "\n";
 
   __END__
@@ -254,44 +256,58 @@ When run this outputs:
   Array returned as an Array_Type
     dim size = 2
     type     = Double_Type
-
-B<TO DO>: add the output from the array-as-piddle part of the
-code.
+  Array returned as an PDL
+    dim size = 2
+    type     = double
 
 =head1 Issues with the PDL support
 
-Version B<0.20> of C<Inline::SLang> adds support for
-the L<Perl Data Language|PDL>. Unfortunately this support
-is still a work in progress.
+=head2 How to access array elements
 
-=over 2
+Although both languages
+deal with n-dimensional arrays, they use different
+indexing schemes: PDL uses the FORTRAN-like method
+where the first index loops fastest, whilst S-Lang
+uses the C indexing scheme, where the last index
+loops fastest. This means that a 2 by 3 array in
+PDL is represented as a 3 by 2 array in S-Lang.
 
-=item *
+=head2 Handling "virtual" piddles
 
-1D piddles and S-Lang arrays should work properly.
+Currently, any "virtual" piddle sent to a S-Lang function
+will be "made physical". This ensures that the S-Lang
+function is sent the correct data but will lead to
+increased memory use. As an example, if C<foo()> is
+a S-Lang function then
 
-=item *
+  $a = sequence(10);
+  $b = $a(2:5);
+  print $b->info( "Type: %T Dim: %-15D State: %S" );
+  foo( $b );
+  print $b->info( "Type: %T Dim: %-15D State: %S" );
 
-Conversion of > 1D arrays/piddles is I<complicated>
-because what to S-Lang is a 2x3 array is, to PDL,
-a 3x2 array!
+will change C<$b> just as if
+L<make_physical()|PDL::Core/PDL::make_physical> had been called
+on it. The output of the two print lines would be:
 
-Currently the arrays are converted like this (ie the
-order of the arrays is swapped). I do B<not>
-think this a good long-term solution. Have I<you> any
-ideas?
+  Type: Double Dim: D [4]           State: -C
+  Type: Double Dim: D [4]           State: P
 
-=item *
+=head2 Dealing with piddles with zero dimensionality
 
-0-dimension piddles are not converted to S-Lang, since
-S-Lang does not allow such an array. We could convert the
-piddle to a scalar or a single-element array.
+In PDL you can have piddles with zero dimensionality.
+I have not yet decided whether these should be converted to
+S-Lang as a scalar or a single-element array. Either
+choice would result in loss of information if the variable
+were returned to Perl.
 
-=item *
+It should be possible to change the way the data from the
+piddle is accessed to avoid this.
 
-It has only been tested on 32-bit machines.
+=head2 Support for 64-bit machines
 
-=back
+The PDL support has only been tested on 32-bit machines, so
+it is possible that things may not work well on 64-bit machines.
 
 =head1 THE ARRAY_TYPE CLASS
 
@@ -348,7 +364,7 @@ containing the data to be stored in the array.
 Note that in this case we just copy the array reference
 and B<not> the actual data stored in this array. This
 means that you can change the data stored in the
-object: useful but can cause bizarre behaviour for the
+object: useful, but can cause bizarre behaviour for the
 unwary.
 
   my $arr1 = Array_Type->new( "Int_Type", [3,2] );
@@ -356,7 +372,6 @@ unwary.
                "String_Type", [3],
                [ "a string", "another string", "boo" ]
              );
-
 
 There is B<no> sanity checking of the input values;
 if they do not agree then something strange will happen at
@@ -380,7 +395,7 @@ of the data stored in the array.
 =item * C<array_info()>
 
 Mimics the S-Lang C<array_info()> function (slightly
-more efficient than usng the S-Lang version). The
+more efficient than using the S-Lang version). The
 array dimensions are returned as a Perl array reference
 and the datatype as a C<DataType_Type> object.
 
@@ -407,7 +422,7 @@ to the specified value. It returns this value.
 Note that there is no check made that the datatype
 of the new value matches that of the array. You
 will find out about this when you try to convert the
-array to S-Lang. Probably with a rather unfriendly
+array to S-Lang, probably with a rather unfriendly
 message.
 
 =item * C<toPerl()>

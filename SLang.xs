@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * $Id: SLang.xs,v 1.30 2004/04/16 04:11:27 dburke Exp $
+ * $Id: SLang.xs,v 1.31 2004/06/08 22:08:01 dburke Exp $
  *
  * SLang.xs
  *   Inline::SLang method bindings.
@@ -360,10 +360,6 @@ void
 _sl_eval( str )
     char * str
 
-  PREINIT:
-    SV **slist = NULL;
-    int i, sdepth;
-
   PPCODE:
     Printf( ("----------------------------------------------------------------------\n") );
     Printf( ("sl_eval: code: %s\n", str ) );
@@ -386,8 +382,7 @@ sl_call_function( qualname, ... )
     char * qualname
 
   PREINIT:
-    SV **slist = NULL;
-    int i, sdepth;
+    int i;
 
   PPCODE:
     Printf( ("sl_call_function called:\n  function: %s\n", qualname ) );

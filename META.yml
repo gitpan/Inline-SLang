@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Inline-SLang
-version:      0.26
+version:      0.30
 version_from: SLang.pm
 installdirs:  site
 requires:

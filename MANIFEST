@@ -11,6 +11,7 @@ examples/bind_many.pl
 examples/bind_rename.pl
 examples/info.pl
 examples/named_struct.pl
+examples/order.pl
 examples/structs.pl
 examples/types.pl
 examples/types_struct.pl

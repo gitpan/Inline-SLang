@@ -18,10 +18,10 @@ print "  dim size = $$dims[0]\n";
 print "  type     = $atype\n";
 
 # use a piddle (assumes Inline::SLang::sl_have_pdl() == 1)
-print sl_array2perl(2), "\n";;
+sl_array2perl(2);
 my $a2 = get_array();
-print "Array returned as an " . ref($a1) . "\n";
-print "  dim size = " . $a2->getdims(0) . "\n";
+print "Array returned as an " . ref($a2) . "\n";
+print "  dim size = " . $a2->getdim(0) . "\n";
 print "  type     = " . $a2->type . "\n";
 
 __END__

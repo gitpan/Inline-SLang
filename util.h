@@ -145,12 +145,7 @@ extern int _slang_array_format; /* declaration in SLang.xs */
  * note the minor complication in that we have to reverse
  * the order of the stack when moving from S-Lang to perl
  *
- * The macro requires the following in the PREINIT: section
- *
- *   SV **slist = NULL;
- *   int i, sdepth;
- *
- * and calls the function 'SV * sl2pl()'
+ * The macro calls the function 'SV * sl2pl()'
  *
  * unlike Inline::Python/Ruby I always check the context
  */
@@ -159,7 +154,8 @@ extern int _slang_array_format; /* declaration in SLang.xs */
 extern int _SLstack_depth(void);
 
 #define CONVERT_SLANG2PERL_STACK \
-    sdepth = _SLstack_depth(); \
+  { \
+    int sdepth = _SLstack_depth(); \
     Printf( ("    *** stack depth = %d\n", sdepth) ); \
  \
     Printf( ("  checking context:\n") ); \
@@ -199,9 +195,13 @@ extern int _SLstack_depth(void);
          * convert the S-Lang objects on the S-Lang stack into perl objects on  \
          * the perl stack \
          * \
-         * note: the order of the S-Lang stack has to be reversed \
+         * note: the order of the S-Lang stack has to be reversed (which is why we \
+         * need the slist array)  \
          */ \
         if ( sdepth ) { \
+          SV **slist = NULL; \
+          int i; \
+ \
           Newz( 0, slist, sdepth, SV * ); \
           if ( NULL == slist ) \
             croak("Error: unable to allocate memory\n" ); /* ott ? */ \
@@ -226,7 +226,8 @@ extern int _SLstack_depth(void);
         /* shouldn't happen with perl <= 5.8.0 */ \
         croak( "Internal error: GIMME_V is set to a value I don't understand\n" ); \
  \
-    } /* switch(GIMME_V) */
+    } /* switch(GIMME_V) */ \
+  } /* end of macro */
 
 
 /*

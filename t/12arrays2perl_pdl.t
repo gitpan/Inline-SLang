@@ -31,7 +31,7 @@ SKIP: {
     ###
     ### tell Inline::SLang that we want to convert S-Lang arrays
     ### into piddles and non-numeric arrays into array references
-    ### [do change this setting later on]
+    ### [we do change this setting later on]
     ###
     Inline::SLang::sl_array2perl(2);
 
@@ -210,24 +210,19 @@ SKIP: {
     isa_ok( $ret1, 'PDL' );
     is( $ret1->ndims, 2, "Array is 2D" );
 
-### NEED TO WORK OUT WHAT IS GOING ON
-###ok( $ret1->getdim(0) == 2 && $ret1->getdim(1) == 3, "  with 2x3 elements" );
-    ok( $ret1->getdim(0) == 3 && $ret1->getdim(1) == 2, "  with 3x2 elements (so flipped)" );
+    ok( $ret1->getdim(0) == 3 && $ret1->getdim(1) == 2, "  with 3x2 elements (flipped)" );
 
     is( $ret1->type->symbol, "PDL_L", "  and Integer_Type converted to PDL_L" );
-###ok( all($ret1 == long([1,2,2],[9,8,7])->reshape(2,3)), "  and contains the correct values [integers]" );
     ok( all($ret1 == long([1,2,2],[9,8,7])), "  and contains the correct values [integers]" );
 
     $ret1 = array2Dr();
     ##print "2D real array:\n" . Dumper($ret1) . "\n";
     isa_ok( $ret1, 'PDL' );
 
-###ok( $ret1->ndims == 2 && $ret1->getdim(0) == 2 && $ret1->getdim(1) == 3, "Array is 2D with 2x3 elements" );
     ok( $ret1->ndims == 2 && $ret1->getdim(0) == 3 && $ret1->getdim(1) == 2, "Array is 2D with 3x2 elements (flipped)" );
 
     is( $ret1->type->symbol, "PDL_D", "  and Double_Type converted to PDL_D" );
 
-###ok( all($ret1 == double([1.1,2.2,2.3],[9.4,8.5,7.6])->reshape(2,3)), "  and contains the correct values [reals]" );
     ok( all($ret1 == double([1.1,2.2,2.3],[9.4,8.5,7.6])), "  and contains the correct values [reals]" );
 
     Inline::SLang::sl_array2perl(1);
@@ -248,14 +243,10 @@ SKIP: {
     ##print "3D integer array:\n" . Dumper($ret1) . "\n";
     isa_ok( $ret1, 'PDL' );
 
-###    ok( $ret1->ndims == 3 &&
-###	$ret1->getdim(0) == 1 && $ret1->getdim(1) == 3 &&
-###	$ret1->getdim(2) == 2, "Array is 3D with 1x3x2 elements" );
     ok( $ret1->ndims == 3 &&
 	$ret1->getdim(0) == 2 && $ret1->getdim(1) == 3 &&
 	$ret1->getdim(2) == 1, "Array is 3D with 2x3x1 elements (flipped)" );
 
-##    ok( all($ret1 == long([[[1,2],[2,9],[8,7]]])->reshape(1,3,2)), "  and contains the correct values [integers]" );
     ok( all($ret1 == long([[[1,2],[2,9],[8,7]]])), "  and contains the correct values [integers]" );
 
     ## multi-dimensional but only containing 1 element
@@ -337,7 +328,6 @@ SKIP: {
     is( ref($ret1), "PDL", 'stack handling: returned an array ref 1' );
     is( ref($ret2), "ARRAY", 'stack handling: returned an array ref 2' );
     is( ref($ret3), "ARRAY", 'stack handling: returned an array ref 3' );
-###ok( all($ret1 == long([3,4,-2],[3,9,0])->reshape(2,3)), "  array 1 okay" );
     ok( all($ret1 == long([3,4,-2],[3,9,0])), "  array 1 okay" );
     is( $#$ret2, 1, "  array 2 has 2 elements" );
     ok( ref($$ret2[0]) && UNIVERSAL::isa($$ret2[0],"Struct_Type"), "  contents=Struct_Type" );
@@ -361,7 +351,6 @@ SKIP: {
     isa_ok( $ret2, 'Array_Type' );
     isa_ok( $ret3, 'Array_Type' );
 
-###ok( all($ret1 == long([3,4,-2],[3,9,0])->reshape(2,3)), "  array 1 okay" );
     ok( all($ret1 == long([3,4,-2],[3,9,0])), "  array 1 okay" );
 
     ( $dims, $ndims, $atype ) = $ret2->array_info();
@@ -532,16 +521,4 @@ define ret_1elem(n) {
   return out;
 }
 
-%% Convert perl to S-Lang
-
-define add2 (a) { return a+2; }
-
-define sum_nelems () {
-  variable sum = 0;
-  foreach ( __pop_args(_NARGS) ) {
-    variable arg = ();
-    sum += length(arg.value);
-  }
-  return sum;
-}
 

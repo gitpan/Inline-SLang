@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * $Id: pdl.c,v 1.4 2004/04/14 02:08:26 dburke Exp $
+ * $Id: pdl.c,v 1.5 2004/06/08 22:10:02 dburke Exp $
  *
  * pdl.c
  *   PDL support for Inline::SLang (at least the utility functions,
@@ -20,10 +20,6 @@
  */
 Core* PDL;   /* Structure holds core C functions */
 SV* CoreSV;  /* Gets pointer to perl var holding core structure */
-
-/* temporary variables whilst the conversion of nD arrays <-> piddles is a mess */
-static int needto_print_nd_warning_slang = 1;
-static int needto_print_nd_warning_pdl   = 1;
 
 /*
  * initialize the pointers that will allow us to call PDL functions 
@@ -79,20 +75,17 @@ sl2pl_array_pdl( SLang_Array_Type *at ) {
   size_t dsize;
   int i;
 
-  /* temp warning */
-  if ( at->num_dims > 1 && needto_print_nd_warning_slang ) {
-    fprintf( stderr, "WARNING: converting a >1d array to a piddle.\n" );
-    fprintf( stderr, "         This is not well handled as yet.\n" );
-    fprintf( stderr, " (this warning will not appear again this run)\n" );
-    needto_print_nd_warning_slang = 0;
-  }
-
   /*
    * copy over the dims
-   * - for now we reverse the dims
+   * (we reverse them since PDL and S-Lang use different
+   *  array-access schemes)
    */
-  for ( i = 0; i < at->num_dims; i++ )
+  Printf( ("*** converting S-Lang array tp Piddle: ndims=%d [", at->num_dims) );
+  for ( i = 0; i < at->num_dims; i++ ) {
     dims[at->num_dims-1-i] = at->dims[i];
+    Printf( (" %d", at->dims[i]) );
+  }
+  Printf( ("] dtype=%d", at->data_type) );
 
   /* should we check for failure? */
   out = PDL->pdlnew();
@@ -102,6 +95,9 @@ sl2pl_array_pdl( SLang_Array_Type *at ) {
   /*
    * copy the memory from the array since I don't know when S-Lang may delete it
    * (would be quicker to just point to it but that leads to memory-managment issues)
+   *
+   * It is not entirely clear to me from the S-Lang docs whether I can safely
+   * access the data field of the array directly.
    */
   PDL->allocdata( out );
   (void) memcpy( out->data, at->data, (size_t) at->num_elements * dsize );
@@ -124,10 +120,23 @@ pl2sl_array_pdl( SV *item ) {
   size_t dsize;
   int i;
 
-  fixme("XXX to do XXX");
-
-  /* have a piddle: do I need to call pdl_make_physical on it??? */
+  /*
+   * we have a piddle. I appear to have to call PDL->make_physdims()
+   * on it (eg if it is a slice of another piddle), but is that 
+   * all, or should I call PDL.make_physvaffine() instead?
+   *
+   * If we do have a piddle that is just a transformation of another
+   * one then I 'cheat' and make it physical; in that way we can use
+   * memcpy() to copy the data across rather than process the
+   * transformation ourselves. It would be nice if there were a function
+   * in the PDL API which would copy the contents of a "virtual" piddle
+   * into a contiguous block of memory. Maybe there is one?
+   *
+   */
   pdl = PDL->SvPDLV(item);
+  PDL->make_physdims(pdl);
+  /* PDL->make_physvaffine(pdl); - do not need this since call make_physical() below */
+
   if ( pdl->ndims > SLARRAY_MAX_DIMS )
     croak( "Error: max number of dimensions for a S-Lang array is %d",
 	   SLARRAY_MAX_DIMS );
@@ -135,15 +144,9 @@ pl2sl_array_pdl( SV *item ) {
   if ( pdl->ndims == 0 )
     croak( "Error: S-Lang does not allow a 0d array - perhaps should promote to 1d or convert to a scalar?" );
   
-  /* temp warning */
-  if ( pdl->ndims > 1 && needto_print_nd_warning_pdl ) {
-    fprintf( stderr, "WARNING: converting a >1d piddle to S-Lang.\n" );
-    fprintf( stderr, "         This is not well handled as yet.\n" );
-    fprintf( stderr, " (this warning will not appear again this run)\n" );
-    needto_print_nd_warning_pdl = 0;
-  }
-
-  /* note: we swap the dims for now */
+  /*
+   * as in sl2pl_array_pdl() we need to reverse the dimensions
+   */
   Printf( ("*** converting Piddle to S-Lang: ndims=%d [", pdl->ndims) );
   for ( i = 0; i < pdl->ndims; i++ ) {
     dims[pdl->ndims-1-i] = pdl->dims[i];
@@ -160,6 +163,14 @@ pl2sl_array_pdl( SV *item ) {
 	   pdl->nvals );
 
   /* copy over the data */
+  if ( pdl->trans ) {
+    /*
+     * hack to make things easier for us; ensure that pdl->data contains
+     * the actual data
+     */
+    Printf( ("*** NOTE: calling PDL->make_physical") );
+    PDL->make_physical(pdl);
+  }
   (void) memcpy( at->data, pdl->data, (size_t) pdl->nvals * dsize );
 
   /* stick array on the stack */

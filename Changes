@@ -1,6 +1,44 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.30
+date:    Tue Jun  8 21:00:16 EDT 2004
+changes:
+
+This is intended to be the last release before the 1.00 version (which will
+hopefully be identical to this one bar the change in version number).
+
+- PDL support:
+  - arrays are converted "as is", so that what is a 2x3 array in S-Lang will
+    be converted to a 3x2 piddle (and vice versa).
+  - Removed the warning messages that were in the code and documentation.
+  - added support for "virtual" piddles (see the description of the
+    make_physical() routine in PDL::Core). The current system is not ideal
+    since it calls make_physical() on any virtual piddle sent to a S-Lang
+    routine, which is a waste of memory. We may want to extend the PDL C
+    API to allow 'easy' read access to data from a virtual piddle (since I
+    do not want to be messing around with the internals of a piddle in this
+    code).
+
+- fixed minor bugs in Makefile.PL:
+    - when multiple S-Lang libraries were found on the system they were all
+      labelled as number 1 (when asking which to use).
+    - the list of paths searched for S-Lang was not displayed correctly in
+      the --help option
+    - improvement to a regexp used to find the size of S-Lang datatypes
+  - Removed the warning message when compiling the PDL support.
+
+- minor enhancements to test suite to check support for n-dimensional
+  piddles. Removed a warning message about the re-definition of the all/any
+  functions.
+
+- fixed minor bug in examples/array_conversion.pl and the documentation
+  (Inline::SLang::Arrays).
+
+- added to the Inline::SLang::Details documentation.
+  - added examples/order.pl which is referenced in Inline::SLang::Details
+
+--
 version: 0.26
 date:    Fri Apr 16 00:07:13 EDT 2004
 changes:

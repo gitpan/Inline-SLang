@@ -90,10 +90,12 @@ sub parse_slconfig () {
       or die "Error: Unable to create $cfrag\n";
     while ( my ( $synonym, $base ) = each %synonyms ) {
 	unless ( exists $sl_sizes{$base} ) {
-	    my $size = $synonym;
-	    $size =~ s/[^\d]+//;
-	    $sl_sizes{$base} = $size / 8
-	      if $size;
+	    # $synonym looks like xxx\d\d_Type so we want to extract the
+            # numbers only
+            #
+	    if ( $synonym =~ m/^\D+(\d+)_Type$/ ) {
+		$sl_sizes{$base} = $1 / 8;
+	    }
 	}
 
 	my $len = length($synonym);
@@ -106,6 +108,8 @@ EOT
     }
     $fh->close;
 
+    # why do I have this?
+    #
     if ( $synonyms{Long_Type} eq "Integer_Type" ) {
 	$sl_sizes{Long_Type} = $sl_sizes{Integer_Type};
     }
@@ -158,20 +162,6 @@ WARNING:
 
 EOW
   }
-
-  # warning messages
-  print <<'EON';
-
-PLEASE NOTE:
-  Found PDL >= 2.4.0 but I should warn you that ...
-  PDL support is currently experimental. As of 0.26 of Inline::SLang
-  1D arrays/piddles convert okay on 32-bit machines (no testing done on
-  64-bit machines). 2D - and higher - arrays/piddles will be converted
-  *BUT* are unlikely to do what you expect. 0D piddles just croak.
-
-  Please read the docs...
-
-EON
 
   require PDL::Core::Dev;
 
@@ -419,7 +409,8 @@ if ( $slangdir ) {
     if ( $#matches > 0 ) {
 	print "\nS-Lang was found in the following locations:\n";
 	my $num = 1;
-	print "\t$num - " . File::Spec->catdir(@$_)  . "\n" for @matches;
+        printf "\t%d - %s\n", $num++, File::Spec->catdir(@$_)
+	    for @matches;
 	print "\n";
 	my $sel = prompt("Use which?", '1');
 	$sel = $matches[$sel-1] if $sel =~ /^\d+$/;
@@ -682,7 +673,7 @@ sub debug_flag {
 }
 
 sub usage {
-    my $paths = join( '', map { "\t$_\n" } @guess_path );
+    my $paths = join( '', map { "\t" . File::Spec->catfile(@$_) . "\n" } @guess_path );
 
     print <<"END";
 Options:

@@ -22,16 +22,6 @@ Inline::SLang - Write Perl subroutines in S-Lang.
 
 =head1 DESCRIPTION
 
- #
- # Version 0.20 adds support for the Perl Data Language.
- # However the way this is implemented *AND* some details of
- # how PDL is supported (mainly the support for non 1D arrays/piddles)
- # is not finalised.
- #
- # As of version 0.25 the PDL support should work on Solaris, Linux,
- # and OS-X systems. It has therefore been made the default option.
- #
-
 The C<Inline::SLang> module lets you write Perl subroutines in S-Lang.
 It dynamically translates the parameters and return values into 
 native data types for both languages (or into Perl classes that are 
@@ -138,7 +128,7 @@ C<foo()> and C<bar()> routines below:
   define bar(x) { foobar = x; }
 
 It I<should> be possible to also bind variables, but this
-is not a high priority (and may never be).
+is not - and may never be - supported.
 
 =head2 Supported Data Types
 
@@ -378,6 +368,25 @@ errors can be handled by using Perl's C<eval> statement.
 =head1 CHANGES
 
 =over 2
+
+=item v0.30 Tue Jun  8 21:00:16 EDT 2004
+
+This is intended to be the last release before the release of version 1.00.
+
+I have decided to stick with the differences between the indexing of
+multi-dimensional arrays in PDL and S-Lang: a C<2x3> element
+piddle will be converted to a C<3x2> element S-Lang array.
+
+The PDL support has been upgraded to better-handle I<virtual> piddles,
+such as slices of another piddle. The current approach has the side
+effect of calling PDL's L<make_physical()|PDL::Core/PDL::make_physical>
+method on the piddle, which results in extra memory use.
+
+Minor bug fixes to Makefile.PL.
+
+Minor documentation fixes - including F<exampes/array_conversion.pl> - and
+improvements to L<Inline::SLang::Details> - including the addition of
+F<examples/order.pl>.
 
 =item v0.26 Fri Apr 16 00:07:13 EDT 2004
 
@@ -749,21 +758,17 @@ time to do this.
 =item *
 
 The only tested operating systems are Solaris, Linux, and
-OS-X (10.3.3). It should compile on UNIX-like systems (no promises
+OS-X (10.3.4). It should compile on UNIX-like systems (no promises
 though), and I will be surprised if it works without tweaking
 on other operating systems.
 
 =item *
 
-Perl >= 5.6.0
+Perl >= 5.6.0 (only really tested on version 5.8).
 
 =back
 
 =head1 BUGS AND DEFICIENCIES
-
-The code has not been widely tested so I can not guarantee what
-will happen if you try to use it (not that I could offer any sort of
-guarantee even if it had been tested across multiple platforms).
 
 Please use the CPAN Resource Tracker at
 http://rt.cpan.org/NoAuth/Bugs.html?Dist=Inline-SLang
