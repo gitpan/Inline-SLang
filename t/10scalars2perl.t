@@ -79,12 +79,12 @@ is( $ret1->Re, 3, '   and real = 3' );
 is( $ret1->Im, 4, '   and imag = 4' );
 
 $ret1 = scalarc3_m45();
-ok( $ret1->Re == 3 & $ret1->Im == -4.5, '3-4.5i is returned okay' );
+ok( $ret1->Re == 3 && $ret1->Im == -4.5, '3-4.5i is returned okay' );
 
 ( $ret1, $ret2 ) = scalarca();
 
-ok( $ret1->Re ==  2.5 & $ret1->Im == 0,   '2.5+0i is returned okay' );
-ok( $ret2->Re ==  0   & $ret2->Im == 4.7, '0+4.7i is returned okay' );
+ok( $ret1->Re ==  2.5 && $ret1->Im == 0,   '2.5+0i is returned okay' );
+ok( $ret2->Re ==  0   && $ret2->Im == 4.7, '0+4.7i is returned okay' );
 
 ## Strings
 $ret1 = scalarstest();

@@ -1,16 +1,23 @@
-/*============================================================================
+/****************************************************************************
+ *
+ * $Id: SLang.xs,v 1.28 2003/08/24 00:23:30 dburke Exp $
+ *
  * SLang.xs
- * Inline::SLang method bindings.
- *==========================================================================*/
+ *   Inline::SLang method bindings.
+ *
+ ****************************************************************************/
 
 #include "util.h"
+#include "pdl.h"
+#include "sl2pl.h"
+#include "pl2sl.h"
 
 /*
  * How are S-Lang arrays converted to Perl?
  *  non-numeric types are as array references
  *  numeric arrays are piddles [if PDL support is available]
  *
- * Cannot be static since used in util.c
+ * Cannot be static since used in sl2pl.c
  */
 int _slang_array_format = I_SL_ARRAY2AREF | I_SL_ARRAY2PDL;
 
@@ -35,7 +42,7 @@ void _sl_error_handler( char *emsg ) {
   SLang_Error = 0;
   /*
    * add a trailing '\n' to stop line number being included in 
-   * $@ since the location isn't much use to people
+   * $@ since the location of the error isn't much use to people
    */
   croak( "%s\n", emsg );
 }
@@ -49,6 +56,9 @@ void _sl_error_handler( char *emsg ) {
  * Linear Congruential Method, the "minimal standard generator"
  * Park & Miller, 1988, Comm of the ACM, 31(10), pp. 1192-1201
  * static char rcsid[] = "@(#)randlcg.c	1.1 15:48:15 11/21/94   EFC";
+ *
+ * I don't know why I didn't just use a system random-number
+ * generator (I'm not that bothered if they're not really random)
  */
 
 #include <math.h>
@@ -62,7 +72,7 @@ static long int my_seed_val  = 0; /* is set at BOOT time */
  * returns a random number between 0 and nmax-1 inclusive
  * - could it return the value of nmax?
  */
-int quick_random( int *nmax ) {
+static int quick_random( int *nmax ) {
   double scale = (double) *nmax;
   if ( my_seed_val <= my_quotient )
     my_seed_val = (my_seed_val * 16807L) % LONG_MAX;
@@ -102,7 +112,7 @@ BOOT:
      * generator to it
      */
     ns = SLns_create_namespace( "_inline" );
-    if( ns == NULL )
+    if( NULL == ns )
       croak( "Error: Unable to create S-Lang namespace (_inline) during initialization\n" );
     if( -1 == SLns_add_intrinsic_function(
                 ns, "_qrandom",(FVOID_STAR) quick_random,
@@ -142,7 +152,7 @@ sl_array2perl( ... )
     int newtype;
   CODE:
     if ( items > 1 ) croak( "Usage: sl_array2perl( [$flag] )" );
-    if ( items == 1 ) {
+    if ( 1 == items ) {
       newtype = (int) SvIV( ST(0) );
       if ( newtype < 0 || newtype > 1+(I_SL_HAVE_PDL<<1) )
         croak( "Error: sl_array2perl() can only be sent an integer between 0 and %d (inclusive)", 1+(I_SL_HAVE_PDL<<1) );
@@ -239,7 +249,7 @@ _sl_isa_datatype( inname )
     Printf( ("Checking if %s is a valid DataType_Type name\n",inname) );
     Printf( ("S-Lang buffer= [%s]\n", slbuffer) );
 
-    (void) SLang_load_string( slbuffer  );
+    (void) SLang_load_string( slbuffer );
 
     if ( -1 == SLang_pop_integer(&flag) )
       croak("Internal error: unable to pop an integer from the S-Lang stack" );
@@ -283,7 +293,7 @@ _guess_sltype( item )
       case SLANG_ASSOC_TYPE:    out = newSVpv( "Assoc_Type", 0 ); break;
       case SLANG_ARRAY_TYPE:    out = newSVpv( "Array_Type", 0 ); break;
       case SLANG_UNDEFINED_TYPE:
-        if ( slflag == 0 ) out = newSVpv( "Undefined_Type", 0 );
+        if ( 0 == slflag ) out = newSVpv( "Undefined_Type", 0 );
         else {
 	  /* handle a type treated as an 'opaque' type */
 	  SV *type;
@@ -301,7 +311,8 @@ _guess_sltype( item )
     PUSHs( sv_2mortal( out ) );
 
 # create an empty nD array
-# - function is defined in util.c
+# - function is defined in util.c, here we just convert a perl array into
+#   a C one
 # - note no error checking
 #
 void

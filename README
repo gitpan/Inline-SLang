@@ -15,6 +15,9 @@
 ***     be loaded every time Inline::SLang is loaded. This may
 ***     be changed.
 ***
+***   The PDL support does not work on Linux and OS-X systems, so it
+***   has been turned off by default.
+***
 
 INTRODUCTION
 
@@ -95,8 +98,8 @@ Please send questions and comments to "Doug Burke" <djburke@cpan.org>
 
 COPYRIGHT AND LICENSE
 
-This software is Copyright (C) 2003 Smithsonian Astrophysical Observatory.
-All rights are reserved.
+This software is Copyright (C) 2003, 2004 Smithsonian Astrophysical
+Observatory. All rights are reserved.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License as

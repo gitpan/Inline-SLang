@@ -1,0 +1,90 @@
+=head1 NAME
+
+Inline::SLang::Details - How Inline::SLang works
+
+=head1 DESCRIPTION
+
+ #
+ # This document was added in versino 0.21 of Inline::SLang and
+ # is not complete
+ #
+
+This document is intended to provide details of how
+L<Inline::SLang|Inline::SLang> weaves its magic. 
+It's probably going to be most use in cases when you 
+find apparently bizarre behaviour and wonder if it is
+a bug or a feature.
+
+The implementation for Inline::SLang was initally
+based on the code found in Neil Watkiss'
+L<Inline::Python> and L<Inline::Ruby> modules.
+However, all bugs are my own creation.
+
+=head2 What happens when Perl starts?
+
+If the Perl code has not been evaluated before - or if
+it has been changed since the previous run - the 
+L<Inline> code kicks in to evaluate the S-Lang code.
+This involves:
+
+=over 2
+
+=item 1
+
+The S-Lang interpreter is started and queried to find
+out all functions that are defined in the namespaces
+listed in the C<BIND_NS> configuration option. 
+The user-supplied
+S-Lang code is then evaluated and the same set of
+namespaces are again queried for the names of defined functions.
+We also pick up any new namespaces that may have been 
+defined if the C<BIND_NS> option is set to C<All>.
+
+The names of the new functions (at least those for which the S-Lang
+function C<_apropos()> reports when called with a flag value of 3) are
+stored for later use.
+
+Complications are:
+
+=over 4
+
+=item a
+
+The "_inline" namespace is ignored since this is used by the
+module and should be considered off-limits.
+
+=item b
+
+The list of functions in bind_slfuncs is added to the list
+of functions to bind.
+
+=item c
+
+The fact that the module allows users to change the name
+that namespaces and (some) functions have when mapped to Perl.
+
+=back
+
+=item 2
+
+The list of defined S-Lang data types is found. This
+includes user-defined types added by any imported modules
+and "named" structures created via a S-Lang C<typedef>
+statement.
+
+Utility functions are created in Perl in the 
+C<Inline::SLang> package which are
+wrappers around calls to the C<DataType_Type> constructor.
+This allows users to say C<Inline::SLang::UShort_Type()>
+rather than C<< DataType_Type->new("UShort_Type") >>.
+
+For those types we do not recognise - essentially all
+user-defined types - we create objects with names
+equal to the S-Lang variable name.
+
+=back
+
+=head1 SEE ALSO
+
+L<Inline::SLang>, L<Inline>
+

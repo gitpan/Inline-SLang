@@ -1,6 +1,27 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.21
+date:    Mon Apr  5 15:15:51 EDT 2004
+changes:
+
+- This is a minor release over version 0.20. The main user-visible changes
+  are:
+    o The module will now build on OS-X.
+    o Support for PDL has been turned off by default since it does not
+      work on Linux and OS-X machines.
+    o The dump() method has been added to the Struct_Type class. This
+      should be considered an experimental feature (which is why it has
+      not been documented) and not relied upon.
+    o Inline::SLang::Details has been added to document the design and
+      implementation of the module. It is not intended to be read by the
+      average user, unless there is a problem. Currently it is little more
+      than a place holder.
+
+- The code has been re-organised: the single file util.c has been
+  split into sl2pl.c, pl2sl.c, and pdl.c.
+
+--
 version: 0.20
 date:    Wed May 21 00:37:07 EDT 2003
 changes:

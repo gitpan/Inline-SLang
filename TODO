@@ -6,6 +6,11 @@ mean it is going to be worked on in the near (or far) future.
 PDL Support
 -----------
 
+- does not work on the Linux or OS-X systems I have available.
+  Something to do with how it interacts with the Inline code since
+  it's a problem when creating the configuration file/directory.
+  Awkward to debug.
+
 - piddles <-> S-Lang arrays for > 1D: how to handle the fact that
   S-Lang 2x3 is 3x2 to PDL:
 
@@ -32,6 +37,13 @@ Other data types
 
 Configuration
 -------------
+
+- we could use Inline::C to embed the code currently in slconfig.c
+  into Makefile.PL. This may avoid re-inventing the wheel with regard
+  to the 'how do I compile this C code on a particular OS' question.
+
+- do we need a way to say 'bind all the functions EXCEPT the following'?
+  see comments in the S-Lang section of t/12arrays2slang_pdl.t
 
 - The PDL code code be conditionally loaded by Inline::SLang - either
   via "use Inline::SLang => Config => PDL => 1;" or a separate
@@ -61,9 +73,6 @@ Tests
 General
 -------
 
-- need some way to find out the sizes of the various data types
-  (particularly for when we add piddle support)
-
 - *could* steal the PDL::NiceSlice ipproach and provide a syntax
   to access Perl versions of S-lang's arrays/structs - eg
     $a(0,2,1) gets translated to $a->get(0,2,3)
@@ -72,6 +81,7 @@ General
     hard
     going to clash with PDL
     going to clash with Perl 6
+  So *very unlikely* to do
 
 - improve documentation
 

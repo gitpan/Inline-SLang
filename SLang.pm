@@ -25,7 +25,7 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS );
 
-$VERSION = '0.20';
+$VERSION = '0.21';
 @ISA = qw(Inline DynaLoader Exporter);
 
 # since using Inline we can't use the standard way
@@ -49,7 +49,11 @@ $VERSION = '0.20';
 # do I need this [left over from code taken from Inline::Ruby/Python
 # modules but not sure what it's really for and too lazy to read
 # about Exporter...]
-#sub dl_load_flags { 0x01 }
+#
+## adding this doesn't stop module from seg faulting when PDL support is
+## selected on Linux
+##
+##sub dl_load_flags { 0x01 }
 Inline::SLang->bootstrap($VERSION);
 
 #==============================================================================
@@ -1134,6 +1138,13 @@ sub CLEAR    { %{$_[0][0]} = () }
 #  get/set_field()     $$o1{baz}
 #                      $foo{baz}
 #
+# Added a "dump" method which returns a string representation of
+# the fields/data in the structure. Somewhat like Varmm's print()
+# function when given a Struct_Type. Currently not documented
+# as needs testing/thinking about. Could have just over-ridden the
+# default "stringify" method but want to keep that behaviour (ie returns the
+# object type)
+#
 # To do:
 #   either copy() or dup() -- including Mike Nobles's "field-slicing"
 #     idea, ie $self->copy("-foo"); removes foo
@@ -1177,6 +1188,47 @@ sub _private_get_hashref { return ${ tied( %{$_[0]} ) }[0]; }
 sub get_field_names { return [ keys %{$_[0]} ]; }
 sub get_field { return $_[0]->{$_[1]}; }
 sub set_field { return $_[0]->{$_[1]} = $_[2]; }
+
+# return a string contaiining a representation of the
+# structs contents. Format may well change.
+#
+# does not handle complicated structures very well
+#
+# perhaps the dump method should be in the
+# Inline::SLang::_Type class and we over-ride it
+# where necessary?
+#
+sub dump {
+    my $self  = shift;
+    my $depth = shift || 0;
+
+    my $spacer = '  ' x ($depth-1);
+
+    my $str = "${spacer}Contents of $self variable:\n";
+    $spacer .= '  ';
+
+    while ( my ( $field, $val ) = each %{$self} ) {
+      $str .= "${spacer}$field\t";
+      if ( defined $val ) {
+	  if ( UNIVERSAL::isa($val,'Inline::SLang::_Type') ) {
+	      $str .= $val->typeof . "\n";
+	      $str .= $val->dump($depth+2)
+		if UNIVERSAL::isa($val,'Struct_Type');
+	  } else {
+	      my $ref = ref($val);
+	      if ( $ref ) {
+		  $str .= $ref . " reference\n";
+	      } else {
+		  $str .= $val . "\n";
+	      }
+	  }
+      } else {
+	  $str .= "Null_Type\n";
+      }
+    }
+    return $str;
+
+} # sub: dump
 
 # now define the tied methods
 

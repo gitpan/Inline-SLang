@@ -22,28 +22,17 @@
 
 #include "slang.h"
 
-#if I_SL_HAVE_PDL == 1
+/* utility functions */
 
-#include "pdlcore.h"
+/*
+ *   char *_get_obj_type( SV *obj )
+ *     returns a string giving the object name (or "<none>")
+ *     the string does not have to be freed after use (I believe)
+ */
+char *_get_object_type( SV *obj );
 
-extern void initialize_pdl_core( void );
-
-#define INIT_PDL_CORE initialize_pdl_core()
-
-#else
-
-#define INIT_PDL_CORE
-
-#endif /* I_SL_HAVE_PDL */
-
-/* functions that are visible outside of util.c */
-void pl2sl( SV *item );
-SLtype pltype( SV *plval, int *flag );
-
-SV * sl2pl( void );
-
-char *_get_object_type( SV *item );
-SV * _create_empty_array( int ndim, int dims[] );
+void _clean_slang_vars( int n );
+SV *_create_empty_array( int ndims, int dims[] );
 
 /*
  * we can convert a S-Lang array into
@@ -63,27 +52,22 @@ SV * _create_empty_array( int ndim, int dims[] );
 
 extern int _slang_array_format; /* declaration in SLang.xs */
 
-/* macro definitions intended for util.h only but placed here for convenience */
-
 /*
  * utility routines for calling Perl object methods from C
- *
- *   char *_get_obj_type( SV *obj )
- *     returns a string giving the object name (or "<none>")
- *     the string does not have to be freed after use (I believe)
  *
  * extra_par_code is a set of XPUSHs(...) statements used to push
  * method parameters onto the stack. If there are none then use ""
  *
  * Note:
  *   these routines assume that the return value - if there is
- *   one - are going to be placed onto the Perl stack, hence they
+ *   one - is going to be placed onto the Perl stack, hence they
  *   explicitly increase the reference count of the returned variable.
  *   This may turn out to be silly.
  *
  *   CALL_METHOD_VOID( SV *obj, char *method, extra_par_code )
  *     calls the method on the given object which is expected
  *     to return nothing
+ *     Currently unused so commented out
  *
  *   CALL_METHOD_SCALAR_DOUBLE( SV *obj, char *method, extra_par_code, double result  )
  *     calls the method on the given object which is expected
@@ -97,10 +81,7 @@ extern int _slang_array_format; /* declaration in SLang.xs */
  *
  */
 
-#define C2PL_MARG(x)   XPUSHs( sv_2mortal( x ) )
-#define C2PL_MARG_D(x) C2PL_MARG( newSVnv( x ) )
-#define C2PL_MARG_S(x) C2PL_MARG( newSVpv( x, 0 ) )
-
+/***
 #define CALL_METHOD_VOID(object,method,parstring) \
  { \
   dSP; ENTER; SAVETMPS; PUSHMARK(SP); \
@@ -111,6 +92,7 @@ extern int _slang_array_format; /* declaration in SLang.xs */
   (void) call_method( method, G_VOID ); \
   SPAGAIN; PUTBACK; FREETMPS; LEAVE; \
  }
+***/
 
 #define CALL_METHOD_SCALAR_DOUBLE(object,method,parstring,result) \
  { \
@@ -122,7 +104,7 @@ extern int _slang_array_format; /* declaration in SLang.xs */
   Printf( ("Calling <some object>->%s(...)\n",method) ); \
   count = call_method( method, G_SCALAR ); \
   SPAGAIN; \
-  if ( count != 1 ) { \
+  if ( 1 != count ) { \
     char emsg[256]; /* if it over-runs, it over-runs */ \
     snprintf( emsg, 256, "%s->%s() did not return a value (expected double)\n", \
       _get_object_type(object), method ); \
@@ -142,7 +124,7 @@ extern int _slang_array_format; /* declaration in SLang.xs */
   Printf( ("Calling <some object>->%s(...)\n",method) ); \
   count = call_method( method, G_SCALAR ); \
   SPAGAIN; \
-  if ( count != 1 ) { \
+  if ( 1 != count ) { \
     char emsg[256]; /* if it over-runs, it over-runs */ \
     snprintf( emsg, 256, "%s->%s() did not return a value (expected SV *)\n", \
       _get_object_type(object), method ); \
@@ -151,184 +133,6 @@ extern int _slang_array_format; /* declaration in SLang.xs */
   result = SvREFCNT_inc( POPs ); /* is this correct ? */ \
   PUTBACK; FREETMPS; LEAVE; \
  }
-
-/*
- * SL2PL_ARRAY1D_ITYPE( INT, int ) 
- * will create code to handle 1D array values of integer types
- *
- *   SLANG_INT_TYPE and SLANG_UINT_TYPE
- *
- * SL2PL_ARRAY1D_FTYPE( FLOAT, float ) 
- * will create code to handle 1D array values of float types
- *
- *   SLANG_FLOAT_TYPE 
- *
- * it assumes that i is defined as an int
- * and the array is in at and that the perl array
- * is in parray
- */
-
-#define SL2PL_ARRAY1D_ITYPE(stypeu,ctype) \
-  case SLANG_##stypeu##_TYPE: \
-    { \
-      ctype ival; \
-      for ( i = 0; i < at->num_elements; i++ ) { \
-	(void) SLang_get_array_element( at, &i, &ival ); \
-	Printf( ("  ctype array1D[%d] = %d\n", i, ival ) ); \
-	av_store( parray, i, newSViv( ival ) ); \
-      } \
-      break; \
-    } \
-  \
-  case SLANG_U##stypeu##_TYPE: \
-    { \
-      unsigned ctype ival; \
-      for ( i = 0; i < at->num_elements; i++ ) { \
-	(void) SLang_get_array_element( at, &i, &ival ); \
-	Printf( ("  unsigned ctype array1D[%d] = %d\n", i, ival ) ); \
-	av_store( parray, i, newSVuv( ival ) ); \
-      } \
-      break; \
-    }
-
-#define SL2PL_ARRAY1D_FTYPE(stypeu,ctype) \
-  case SLANG_##stypeu##_TYPE: \
-    { \
-      ctype fval; \
-      for ( i = 0; i < at->num_elements; i++ ) { \
-	(void) SLang_get_array_element( at, &i, &fval ); \
-	Printf( ("  ctype array1D[%d] = %g\n", i, fval ) ); \
-	av_store( parray, i, newSVnv( fval ) ); \
-      } \
-      break; \
-    }
-
-/*
- * SL2PL_ARRAY2D_ITYPE( INT, int ) 
- * will create code to handle 2D array values of integer types
- *
- *   SLANG_INT_TYPE and SLANG_UINT_TYPE
- *
- * SL2PL_ARRAY2D_FTYPE( FLOAT, float ) 
- * will create code to handle 2D array values of float types
- *
- *   SLANG_FLOAT_TYPE 
- *
- * it assumes that i, j is defined as an int
- * and the array is in at and that the perl arrays
- * are in xarray & yarray
- * also nx,ny must be the axes sizes
- * and long dims[2]
- */
-
-#define SL2PL_ARRAY2D_ITYPE(stypeu,ctype) \
-  case SLANG_##stypeu##_TYPE: \
-    { \
-      ctype ival; \
-      for ( i = 0; i < nx; i++ ) { \
-	yarray = (AV *) sv_2mortal( (SV *) newAV() ); \
-	av_extend( yarray, (I32) ny ); \
- \
-	dims[0] = i; \
-	for ( j = 0; j < ny; j++ ) { \
-	  dims[1] = j; \
- \
-	  (void) SLang_get_array_element( at, dims, &ival ); \
-	  Printf( ("  ctype array2D[%d,%d] = %i\n", i, j, ival ) ); \
-	  av_store( yarray, j, newSViv( ival ) ); \
- \
-	} /* for: j */ \
- \
-	av_store( xarray, i, newRV_inc( (SV *) yarray ) ); \
- \
-      } /* for: i */ \
-      break; \
-    } \
- \
-  case SLANG_U##stypeu##_TYPE: \
-    { \
-      unsigned ctype ival; \
-      for ( i = 0; i < nx; i++ ) { \
-	yarray = (AV *) sv_2mortal( (SV *) newAV() ); \
-	av_extend( yarray, (I32) ny ); \
- \
-	dims[0] = i; \
-	for ( j = 0; j < ny; j++ ) { \
-	  dims[1] = j; \
- \
-	  (void) SLang_get_array_element( at, dims, &ival ); \
-	  Printf( ("  unsigned ctype array2D[%d,%d] = %i\n", i, j, ival ) ); \
-	  av_store( yarray, j, newSVuv( ival ) ); \
- \
-	} /* for: j */ \
- \
-	av_store( xarray, i, newRV_inc( (SV *) yarray ) ); \
- \
-      } /* for: i */ \
-      break; \
-    } 
-
-#define SL2PL_ARRAY2D_FTYPE(stypeu,ctype) \
-  case SLANG_##stypeu##_TYPE: \
-    { \
-      ctype fval; \
-      for ( i = 0; i < nx; i++ ) { \
-	yarray = (AV *) sv_2mortal( (SV *) newAV() ); \
-	av_extend( yarray, (I32) ny ); \
- \
-	dims[0] = i; \
-	for ( j = 0; j < ny; j++ ) { \
-	  dims[1] = j; \
- \
-	  (void) SLang_get_array_element( at, dims, &fval ); \
-	  Printf( ("  ctype array2D[%d,%d] = %g\n", i, j, fval ) ); \
-	  av_store( yarray, j, newSVnv( fval ) ); \
- \
-	} /* for: j */ \
- \
-	av_store( xarray, i, newRV_inc( (SV *) yarray ) ); \
- \
-      } /* for: i */ \
-      break; \
-    }
-
-/*
- * SL2PL_ITYPE( INT, integer, int ) 
- * will create code to handle scalar values of integer type
- *   SLANG_INT_TYPE and SLANG_UINT_TYPE
- * the second argument is the name of the SLang_pop_xxx
- * routine, and the third the c type (it's only for int/integer
- * that the second and third args are different)
- */
-
-#define SL2PL_ITYPE(stypeu,stypel,ctype) \
-  case SLANG_##stypeu##_TYPE: \
-    { \
-      ctype ival; \
-      if ( -1 == SLang_pop_##stypel ( &ival ) ) \
-	croak( "Error: unable to read stypel value from the stack\n" ); \
-      Printf( ("  stack contains: ctype = %i\n", ival ) ); \
-      return newSViv(ival); \
-    } \
-  \
-  case SLANG_U##stypeu##_TYPE: \
-    { \
-      unsigned ctype ival; \
-      if ( -1 == SLang_pop_u##stypel ( &ival ) ) \
-	croak( "Error: unable to read stypel value from the stack\n" ); \
-      Printf( ("  stack contains: unsigned ctype = %i\n", ival ) ); \
-      return newSVuv(ival); \
-    }
-
-/* 
- * need to pop item off S-Lang's internal stack and push
- * it onto S-Lang's main stack (or I've confused myself)
- */
-#define SL_PUSH_ELEM1_ONTO_STACK(nelem) \
-  (void) SLang_load_string( \
-    "$2=struct {value};set_struct_field($2,\"value\",$1);__push_args($2);" \
-  ); \
-  _clean_slang_vars(nelem);
 
 /* macros only used in SLang.xs but placed here for convenience */
 
@@ -350,6 +154,9 @@ extern int _slang_array_format; /* declaration in SLang.xs */
  *
  * unlike Inline::Python/Ruby I always check the context
  */
+
+/* taken from _slang.h */
+extern int _SLstack_depth(void);
 
 #define CONVERT_SLANG2PERL_STACK \
     sdepth = _SLstack_depth(); \
@@ -396,7 +203,7 @@ extern int _slang_array_format; /* declaration in SLang.xs */
          */ \
         if ( sdepth ) { \
           Newz( 0, slist, sdepth, SV * ); \
-          if ( slist == NULL ) \
+          if ( NULL == slist ) \
             croak("Error: unable to allocate memory\n" ); /* ott ? */ \
           for ( i = sdepth-1; i >= 0; i-- ) { \
             Printf( ("reading from S-Lang stack item #%d\n", i ) ); \
@@ -422,5 +229,13 @@ extern int _slang_array_format; /* declaration in SLang.xs */
     } /* switch(GIMME_V) */
 
 
-#endif /* SL2PL_UTIL_H */
+/*
+ * a badly-named macro
+ * This is used when calling a S-Lang function whose error code we
+ * should check but I'm not sure whether the error handler catches
+ * the error or not. So, I've wrapped the code in a define which
+ * we can easily change if the error handler works
+ */
+#define UTIL_SLERR( slfunc, emsg ) if ( -1 == slfunc ) croak( emsg )
 
+#endif /* SL2PL_UTIL_H */

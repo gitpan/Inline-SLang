@@ -390,6 +390,12 @@ is( sumup_nelems( [0], [ ["a", "b"], ["cc", "d"] ], [3.4, 5.6, 9.4, 55] ),
 __END__
 __SLang__
 
+%% There are already main::sum, main::all, and main::any routines
+%% (are these created by PDL?) which means we do not really want to export
+%% these functions back to Perl [plus we do not use them in the Perl code
+%% anyway]. unfortunately we do not (as yet) have a way of saying
+%% "bind everything except for these functions".
+%%
 #ifndef sum
 define sum(x) { variable tot = 0; foreach ( x ) { tot += (); } return tot; }
 #endif

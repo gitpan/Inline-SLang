@@ -39,8 +39,14 @@ my ( $ret1, $ret2, $ret3, @ret );
 ## S-Lang 2 perl
 
 $ret1 = struct1();
+
+# Note: the dump method is not for public consumption (yet ?)
+#
 ##print Dumper( $ret1 ), "\n";
 print Dumper( tied(%$ret1) ), "\n";
+print "And using the dump method:\n";
+print $ret1->dump, "\n";
+
 isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Inline::SLang::_Type" );
 ok( $ret1->is_struct_type, "and we are a structure" );
@@ -81,6 +87,9 @@ isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Bar_Type" );
 is( $ret1->typeof, Bar_Type(), "checking type matches" );
 is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
+
+print "And using the dump method, the type-deffed structure returns:\n";
+print $ret1->dump, "\n";
 
 ok( eq_array( [keys %$ret1], [ "foo", "bar" ] ),
     "  and contains the correct fields (in the right order)" );
@@ -198,6 +207,9 @@ $$ret1{"x3"}{bar} = 47.3;
 $$ret1{"_bob"}{a1} = 0;
 $$ret1{"_bob"}{x1} = DataType_Type();
 $$ret1{"_bob"}{q1} = Math::Complex->make(-4,2);
+
+print "And using the dump method, the 'deep-nested' struct is:\n";
+print $ret1->dump, "\n";
 
 $ret2 = Bar_Type->new();
 $ret3 = Bar_Type->new();

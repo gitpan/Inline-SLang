@@ -28,6 +28,9 @@ Inline::SLang - Write Perl subroutines in S-Lang.
  # how PDL is supported (mainly the support for non 1D arrays/piddles)
  # is not finalised.
  #
+ # This support does not work on Linux and OS-X machines so it
+ # has been turned off by default in version 0.21
+ #
 
 The C<Inline::SLang> module lets you write Perl subroutines in S-Lang.
 It dynamically translates the parameters and return values into 
@@ -52,7 +55,7 @@ Inline::S-Lang already knows the results of running it.
 
 =head1 What is S-Lang?
 
-From the S-Lang library home page at http://www.s-lang.org/
+From the S-Lang library home page at L<http://www.s-lang.org/>
 
 S-Lang is a multi-platform programmer's library designed to allow a
 developer to create robust multi-platform software. It provides
@@ -362,6 +365,17 @@ This means that such
 errors can be handled by using Perl's C<eval> statement.
 
 =head1 CHANGES
+
+=over 2
+
+=item v0.21 Mon Apr  5 15:15:51 EDT 2004
+
+This release will now build on OS-X machines. The support for
+PDL has been turned off by default - even if PDL is installed on
+your system - since it does not work on Linux and OS-X machines.
+
+The main changes are behind the scenes, and involve splitting the
+code up and making a tad more modular.
 
 =over 2
 
@@ -693,9 +707,8 @@ time to do this.
 
 =item *
 
-The only tested operating systems are Solaris and Linux.
-This will hopefully extend to Alpha and Mac OS X machines in the
-near future. It should compile on UNIX-like systems (no promises
+The only tested operating systems are Solaris, Linux, and
+OS-X (10.3.3). It should compile on UNIX-like systems (no promises
 though), and I will be surprised if it works without tweaking
 on other operating systems.
 
@@ -707,8 +720,9 @@ Perl >= 5.6.0
 
 =head1 BUGS AND DEFICIENCIES
 
-This is I<alpha> release code. So, by design,
-there will be lots of bugs and deficiencies.
+The code has not been widely tested so I can not guarantee what
+will happen if you try to use it (not that I could offer any sort of
+guarantee even if it had been tested across multiple platforms).
 
 Please use the CPAN Resource Tracker at
 http://rt.cpan.org/NoAuth/Bugs.html?Dist=Inline-SLang
@@ -722,7 +736,7 @@ For information about using C<Inline>, see L<Inline>.
 
 For information about other Inline languages, see L<Inline-Support>.
 
-For information about S-Lang see C<http://www.s-lang.org/>.
+For information about S-Lang see L<http://www.s-lang.org/>.
 
 =head1 ACKNOWLEDGEMENTS
 
@@ -739,15 +753,14 @@ Doug Burke <djburke@cpan.org>
 
 =head1 COPYRIGHT
 
-This software is Copyright (C) 2003 
+This software is Copyright (C) 2003, 2004 
 Smithsonian Astrophysical Observatory.
 All rights are reserved. 
 
 It is released under the GNU General Public License.
 You may find a copy of this licence in the file 
 LICENSE within the source distribution or at 
-
-  http://www.fsf.org/copyleft/gpl.html
+L<http://www.fsf.org/copyleft/gpl.html>
 
 Prior to version 0.04 the module was distributed
 under the same terms as Perl.
