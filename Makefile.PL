@@ -19,8 +19,8 @@ print "\nPlease note - this is an alpha release.\n\n";
 
 use strict;
 
-use Data::Dumper;
 use Config;
+##use Data::Dumper;
 use ExtUtils::MakeMaker;
 use Getopt::Long;
 use IO::File;
@@ -34,7 +34,7 @@ my $slangdir = "";
 my $slanglib = "";
 my $slanginc = "";
 my $pdl = 1;
-$pdl = 0; # hack for 0.11 since we don't yet support PDL
+$pdl = 0; # hack for 0.12 since we don't yet support PDL
 
 ## Search path for the S-Lang library
 
@@ -142,37 +142,90 @@ die "Error: unable to find slang.h in the include directory ($slanginc)\n"
 die "Error: unable to find libslang[$ext_dyn|$ext_stat] in the library directory ($slanglib)\n"
     unless -e "$slanglib/libslang$ext_dyn" || -e "$slanglib/libslang$ext_stat";
 
-# now check for version in slang.h
+my $incpath = "-I$slanginc";
+my $libpath = "-L$slanglib -lslang";
+
+# now check the S-Lang interpreter for how it was
+# compiled (and some information about type synonyms)
+# This information could be checked for at compile time
+# - ie whenever a piece of code is first evaluated - but
+# let's try and save a little time
+# We also check for whether support for float & complex
+# types are available - we currently die if they aren't,
+# although the code code be updated to make such support
+# optional (I don't have the time/interest)
 #
-# could also check for things like max num of array dims
-# and whether support for floating-point numbers
+# format taken from trylink subroutine in PDL/Core/Dev.pm
 #
-# an alternative is to use a configure-style approach and compile
-# a small C program...
-#
-my $fh = IO::File->new( "< ${slanginc}/slang.h" )
-  or die "Error: unable to read from ${slanginc}/slang.h\n";
+my $in  = "slconfig.c";
+my $out = "slconfig";
+
+my $cc = $Config{cc} ||
+  die "Err: can not find name of C compiler used to create Perl!\n";
+my $exe = $Config{_exe};
+$out .= $exe;
+
+unlink $out if -e $out;
+die "Error: Unable to delete $out\n" if -e $out;
+
+# doesn't seem to want to work with a list input (or rather I'm
+# making a stupid mistake)
+system( "$cc -o $out $incpath $libpath $in" ) and
+  die "Error: Unable to compile a test program using\n" .
+      "       $incpath $libpath\n";
+die "Error: did not create $out from $in\n"
+  unless -e $out;
+
+my $code = "slconfig.dat";
+unlink $code if -e $code;
+die "Error: Unable to delete $code\n" if -e $code;
+
+my $minver = "10407";
+system( "./$out $minver" ); # this is ***UNIX SPECIFIC***
+my $run = $? >> 8;
+die "\nError: Unable to run '$out $minver' - error code = [$run]\n"
+  if $run;
+die "\nError: '$out $minver' did not create '$code'\n"
+  unless -e $code;
+  
+my %synonyms;
+my $fh = IO::File->new( "< $code" )
+  or die "Error: unable to read from $code\n";
 while ( <$fh> ) {
   chomp;
-  s/^\s+//g;
-  next unless /^#define\s+SLANG_VERSION\s/;
-  my ( $dummy, $name, $version, @rest ) = split;
-  die "Error: S-Lang version ($version) must be >= 10407 for Inline::SLang\n"
-    unless $version >= 10407;
-  print "Compiling against S-Lang version $version\n";
-  last;
+  my ( $dummy, $synonym, $base ) = split; 
+  $synonyms{$synonym} = $base;
 }
 $fh->close;
 
-my $incpath = "-I$slanginc";
-my $libpath = "-L$slanglib -lslang";
+# Convert this to code used by _sl_defined_types in SLang.xs
+# - what a lovely mess I'm making
+#   (stf = slang-type-fragment but trying to be sensitive to 
+#          filename-challenged filesystems)
+#
+my $cfrag = "stf.h";
+unlink $cfrag if -e $cfrag;
+die "Error: Unable to remove $cfrag\n" if -e $cfrag;
+
+$fh = IO::File->new( "> $cfrag" )
+  or die "Error: Unable to create $cfrag\n";
+while ( my ( $synonym, $base ) = each %synonyms ) {
+  my $len = length($synonym);
+  $fh->print( <<"EOT");
+  arrayref = newAV(); av_extend( arrayref, (I32) 2 );
+  av_store( arrayref, 0, newSVpv("$base",0) );
+  av_store( arrayref, 1, newSViv( 2 ) );
+  (void) hv_store( hashref, "$synonym", $len, newRV_inc( (SV *) arrayref ), 0 );
+EOT
+}
+$fh->close;
 
 #============================================================================
 # PDL support
 #============================================================================
 
-# HACK for 0.11
-if ( $pdl ) { print "\nNOTE: 0.11 does not support the --pdl option. Turning off\n\n"; $pdl = 0; }
+# HACK for 0.12
+if ( $pdl ) { print "\nNOTE: 0.12 does not support the --pdl option. Turning off\n\n"; $pdl = 0; }
 
 if ( $pdl ) {
   # should I try and enforce a version of PDL?
@@ -207,7 +260,7 @@ WriteMakefile(
 			    'Test::More' => 0,
 			    'Inline' => 0.42,
 			   },
-    realclean		=> { FILES => '_Inline' },
+    clean		=> { FILES => '_Inline ' . $out . ' slconfig.dat stf.h' },
     ABSTRACT_FROM       => 'SLang.pod',
     AUTHOR              => 'Doug Burke <djburke@cpan.org>',
 );

@@ -1,6 +1,24 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.12
+date:    Sun May 11 23:33:38 EDT 2003
+changes:
+
+- Added support for type "synonyms": you can now create DataType_Type
+  objects of type Int16_Type, UInt16_Type, Int32_Type, UInt32_Type,
+  Float32_Type, Float64_Type, Short_Type, Long_Type and possibly
+  Int64_Type, UInt64_Type. The return value of Inline::SLang::Int32_Type()
+  - or whatever - is the actual type usedf by S-Lang rather than the
+  type synonym. Note that Short/Long types may not actually be synonyms.
+ 
+- The build process now checks that the S-Lang interpreter was built with
+  support for floats and complex types; if not it exits with an error.
+
+- Added a brief section to the Inline::SLang document describing how
+  S-Lang are handled.
+
+--
 version: 0.11
 date:    Wed May  7 00:39:17 EDT 2003
 changes:

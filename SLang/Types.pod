@@ -61,7 +61,7 @@ been used, but then we would not be able to convert it
 back into a C<Complex_Type> variable in S-Lang (well, not
 without telling the computer this is what we wanted).
 
-I promise that soon (not many more releases after v0.11)
+I promise that soon (not many more releases after v0.12)
 the module will support
 L<the Perl Data Language (ie PDL)|PDL>,
 since it provides variables ("piddles") which retain
@@ -84,13 +84,13 @@ for further details.
 
 NULL
 
-Converted to a perl undef.
+Converted to a Perl undef.
 
 =item *
 
 [Char|UChar|Short|UShort|Integer|UInteger|Long|ULong]_Type
 
-Converted to a perl integer. The unsigned types are
+Converted to a Perl integer. The unsigned types are
 converted as unsigned values, whatever difference that
 may make.
 
@@ -98,13 +98,13 @@ may make.
 
 [Float|Double]_Type
 
-Converted to a perl floating-point number.
+Converted to a Perl floating-point number.
 
 =item *
 
 Complex_Type
 
-Converted to a C<Math::Complex> object.
+Converted to a Perl C<Math::Complex> object.
 
 =item *
 
@@ -117,25 +117,31 @@ Converted to a perl string.
 Array_Type
 
 Converted to one of: a Perl array reference,
-an C<Array_Type> object, or a I<piddle>.
+a Perl C<Array_Type> object, or a I<piddle>.
 
 Actually, the support for piddles is
-not-yet available (version 0.11).
+not-yet available (version 0.12).
 
 =item *
 
 Assoc_Type
 
-Converted to an C<Assoc_Type> object.
+Converted to a Perl C<Assoc_Type> object.
 
 =item *
 
 Struct_Type and "named" structures
 
 Struct_Type variables are converted to a
-C<Struct_Type> object, whilst "named" structures
+Perl C<Struct_Type> object, whilst "named" structures
 are converted to objects with the same name
 as the S-Lang struct name.
+
+=item *
+
+DataType_Type
+
+Converted to a Perl C<DataType_Type> object.
 
 =item *
 
@@ -237,6 +243,12 @@ Perl C<Struct_Type> and derived objects.
 
 Converted to the matching S-Lang type
 (C<Struct_Type> or the "named" struct).
+
+=item *
+
+Perl C<DataType_Type> object.
+
+Converted to S-Lang's C<DataType_Type>.
 
 =item *
 
@@ -443,7 +455,12 @@ Note that even though the functions take no arguments
 you have to supply the C<()> in order for Perl to
 recognise it as a function.
 The return value (C<$var> here) can be used just
-as the output of C<< DataaType_Type->new() >> can.
+as the output of C<< DataType_Type->new() >> can.
+
+It is possible to use the names of type "synonyms" - such
+as C<Int_Type()> and C<Float32_Type()> - although the
+value they return is of the I<base> type and not the
+synonym.
 
 The class-specific methods are:
 
@@ -457,14 +474,17 @@ The C<new()> method accepts a string (C<$type>)
 containing the name of the S-Lang datatype (e.g.
 "UChar_Type"). If no variable is supplied then
 "DataType_Type" is assumed.
-
-Synonyms of types (eg 'Int_Type' for
-'Integer_Type') are accepted but automatically converted to
-the 'original' type name.
-
-Note that if you supply a name that does I<not>
+Synonyms of types (eg 'Int_Type' and 'Float32_Type')
+are accepted but automatically converted to
+the I<base> type name.
+If you supply a name that does I<not>
 map to a S-Lang datatype then the return value is
 C<undef>.
+
+In general you should probably be using the functional
+form described abode - i.e. use C<Integer_Type()> - but
+this constructor can be useful when the data type is
+not known ahead of time.
 
 =item stringify()
 

@@ -21,14 +21,14 @@ Example:
 
    use Inline SLang => <<'END';
    define JAxH(x) {
-     return sprintf( "Just Another %s Hacker", string(x) );
+     return sprintf( "Just Another %S Hacker!", x );
    }
    END
    print JAxH('Inline'), "\n";
 
 When run, this complete program prints:
 
-   Just Another Inline Hacker
+   Just Another Inline Hacker!
 
 ==============================================================================
 
@@ -41,8 +41,10 @@ Perl requirements (see CPAN at http://search.cpan.org/):
 
 S-Lang requirements:
   Version 1.4.7 or higher of the S-Lang library.
-  The code assumes that S-Lang has been compiled with support for
+  The code requires that S-Lang has been compiled with support for
   floating-point and complex numbers.
+
+The module has only been tested on Solaris and Linux machines.
 
 To install Inline::SLang do this:
 
@@ -59,8 +61,6 @@ The main options of interest are -slangdir or -slanglib/inc to specify
 the location of the library and its include file. The program looks in
 /usr, /usr/local, and - if installed - the ots directory within the
 CIAO directory structure (http:://cxc.harvard.edu/ciao/).
-
-This has only been tested in UNIX (Linux and Solaris) environments.
 
 Note that you have to 'make install' before you can run it successfully.
 

@@ -11,4 +11,6 @@ RCS
 ^test
 \.tar\.gz$
 ^t/memtest$
-
+slconfig.(o|dat)$
+slconfig$
+stf.h$

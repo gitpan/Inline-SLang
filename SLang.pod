@@ -15,22 +15,31 @@ Inline::SLang - Write Perl subroutines in S-Lang.
 
   define add      (a,b) { return a + b; }
   define subtract (a,b) { return a - b; }
-
   define JAxH () {
     variable type = ();
-    return "Just Another " + string(type) + " Hacker!";
+    return sprintf( "Just Another %S Hacker!", type );
   }
 
 =head1 DESCRIPTION
 
-The C<Inline::SLang> module allows you to put S-Lang source code
-directly "inline" in a Perl script or module. It sets up an in-process
+The C<Inline::SLang> module lets you write Perl subroutines in S-Lang.
+It dynamically translates the parameters and return values into 
+native data types for both languages (or into Perl classes that are 
+used to represent
+S-Lang types with no direct translation to Perl).
+This allows you to write a Perl script and take advantage of S-Lang
+whenever you wish: perhaps there is a S-Lang I<module> that you
+wish to use, or you want to take advantage of a S-Lang function
+that you have written.
+
+The module sets up an in-process
 S-Lang interpreter, runs your code, and then examines the
 interpreter's symbol table, looking for things to bind to Perl.
-
 The process of interrogating the S-Lang interpreter only occurs the
 first time you run your S-Lang code. The namespaces are cached, and
-subsequent calls use the cached version. Of course, your S-Lang code
+subsequent calls use the cached version (which is hidden in the
+F<_Inline> directory; see the L<Inline documentation|Inline> for details of
+how the code is cached). Of course, your S-Lang code
 must still be run every time your run the Perl script -- but
 Inline::S-Lang already knows the results of running it.
 
@@ -94,7 +103,7 @@ when mapped to Perl, does not clobber an existing value
 So I<beware> when you define a S-Lang function called 
 C<open()>!
 
-=head3 But all I want to do is use this S-Lang module?
+=head3 But all I want to do is use a S-Lang module?
 
 If you have a S-Lang module that you want to use directly
 from Perl, it's as easy as the following (assuming the
@@ -135,7 +144,7 @@ See L<Inline::SLang::Types>
 for more information on how the various data types are
 supported.
 
-The module currently assumes that yor S-Lang library has been compiled
+The module currently B<requires> that yor S-Lang library has been compiled
 with support for both floating-point and complex numbers.
 
 =head2 Perl routines
@@ -160,6 +169,9 @@ a S-Lang array into Perl" flag. Returns the status.
 We list the possible values of the flag below.
 For further details on array support in C<Inline::SLang>
 see L<Inline::SLang::Array>.
+
+B<Note:> There is no PDL support as of version 0.12 of
+C<Inline::SLang>; we are getting closer to such support however.
 
 =head4 With no PDL support
 
@@ -336,9 +348,50 @@ of "a.b.c". You can use C<sl_eval("_slang_version_string")>
 to find out what version of the library
 you are using.
 
+=head2 What happens when there is a S-Lang error?
+
+The module will refuse to build if there is an error in the S-Lang
+code compiled when your program is first run. If an error occurs
+in the S-Lang interpreter - such as calling a function that expects
+an argument with none - then the S-Lang error is transformed into
+a Perl error (as a call to C<croak>) and the S-Lang interpreter
+is restarted.
+This means that such
+errors can be handled by using Perl's C<eval> statement.
+
 =head1 CHANGES
 
 =over 2
+
+=item v0.12 Sun May 11 23:33:38 EDT 2003
+
+This is a minor upgrade in functionality to version 0.11; the
+changes are made to help support the inclusion of PDL in a future
+release. The changes are:
+
+=over 2
+
+=item *
+
+Added support to the C<DataType_Type> class
+for numeric types that are - or may be -
+synonyms of the "base" types. The added types are:
+C<Int16_Type>, C<Int32_Type>, their unsigned versions,
+C<Float32_Type>, C<Float64_Type>, and - if they are not a
+"base" type - C<Short_Type> and C<Long_Type>.
+
+=item *
+
+The build process now checks that the S-Lang library was built with
+support for floating-point and complex numbers. If it was not then
+it should stop.
+
+=item *
+
+Added a brief section to this document describing
+how S-Lang errors are handled.
+
+=back
 
 =item v0.11 Wed May  7 00:39:17 EDT 2003
 
@@ -588,22 +641,32 @@ Initial public release
 
 =head1 SUPPORTED PLATFORMS
 
-I do not have the time to support anything but a recent version
-of S-Lang - defined as 1.4.7 or higher - on Solaris and Linux
-machines. This will hopefully extend to Mac OS X and Alpha
-machines in the near future.
+=over 2
 
-The code is I<NOT> guaranteed to work with an earlier version;
-in fact F<Makefile.PL> should have screamed at you and gone off
-in a sulk if you tried to build againt an earlier version.
+=item *
 
-It is intended to support Perl versions >= 5.6.0 only (at least the
-release versions rather than the development releases). However note
-that the development is made using version 5.8.0, and so there
-may be subtle/hidden issues with the 5.6.x series of Perl.
-It is not
-clear yet whether we really need any >= 5.6.0 functionality, but this
-restriction does make testing/developing a lot easier for me.
+S-Lang library >= 1.4.7
+
+=item *
+
+The S-Lang library must have been compiled with support for
+floating-point and complex numbers. The module could be
+made to work without these numbers/types but I do not have the
+time to do this.
+
+=item *
+
+The only tested operating systems are Solaris and Linux.
+This will hopefully extend to Alpha and Mac OS X machines in the
+near future. It should compile on UNIX-like systems (no promises
+though), and I will be surprised if it works without tweaking
+on other operating systems.
+
+=item *
+
+Perl >= 5.6.0
+
+=back
 
 =head1 BUGS AND DEFICIENCIES
 
@@ -627,8 +690,8 @@ For information about S-Lang see C<http://www.s-lang.org/>.
 =head1 ACKNOWLEDGEMENTS
 
 John Davis (for S-Lang), Brian Ingerson (for the Inline framework),
-and Neil Watkiss since I stole virtually everything from his
-L<Inline::Python> and L<Inline::Ruby> modules.
+and Neil Watkiss since I based much of this module on
+his L<Inline::Python> and L<Inline::Ruby> modules.
 
 However, please do not assume that any errors in this module are in
 any way related to the above people.

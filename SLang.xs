@@ -158,10 +158,17 @@ sl_array2perl( ... )
 # Now, this latter piece of information is hard to find out
 # - for now I'm going to use a S-Lang library routine that 
 #   is not in slang.h but is not marked static
-# - this is not the best thing
+# - this is not ideal since I'm making assumptions about the
+#   internals of S-Lang that aren't obviously "public" (ie
+#   things may change)
 #
-# this is partly hacking at the internals of S-Lang,
-# even if the routines are public
+# Also, have shoe-horned into this routine a list of type
+# "synonyms" recognised by the S-Lang interpreter. This
+# information is generated at 'perl Makefile.PL' time,
+# and we just include it here. In this case the hash key is the
+# synonym, the first element of the array is the 'base' type,
+# and the second element is set to 2 (this assumes that there aren't
+# any type synonyms of structures)
 #
 void
 _sl_defined_types( )
@@ -197,6 +204,9 @@ _sl_defined_types( )
 		newRV_inc( (SV *) arrayref ), 0 );
       }
     } /* for: i */
+
+    /* add in the type synonyms */
+#include "stf.h"
 
     /* return the associative array reference */
     PUSHs( newRV_inc( (SV *) hashref) );

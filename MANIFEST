@@ -30,6 +30,7 @@ examples/types.pl
 examples/types_struct.pl
 examples/use_anytype.pl
 examples/use_refs.pl
+slconfig.c
 t/00init.t
 t/02bind_all.t
 t/02bind_foo.t
@@ -40,6 +41,7 @@ t/03export_funcs.t
 t/10scalars.t
 t/10scalars2perl.t
 t/10scalars2slang.t
+t/11type_synonyms.t
 t/12arrays2perl.t
 t/12arrays2perl_atype.t
 t/12arrays2slang.t

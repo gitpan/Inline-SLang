@@ -221,9 +221,11 @@ is just the same as calling
 
   DataType_Type->new("Integer_Type");
 
-Note that this only holds for the "main" types; for
-synonyms - such as C<Int_Type> and C<Float32_Type> - you
-still have to use the C<DataType_Type> constructor.
+Note that - as of version 0.12 of C<Inline::SLang> - you can
+also use the name of I<synonyms> as well as the I<base>
+classes. For instance, C<Int32_Type()> will return
+the datatype that corresponds to the S-Lang
+C<Int32_Type> type.
 
 =back
 
@@ -260,20 +262,22 @@ source code of the module):
   define bar(x) { foobar = x; }
   FOO
 
-The relevant part of the output (as of version 0.11) is:
+The relevant part of the output (as of version 0.12) is:
 
   Configuration details
   ---------------------
 
   Version of S-Lang: 1.4.8
-  Perl module version is 0.11 with no support for PDL
+  Perl module version is 0.12 with no support for PDL
 
   The following S-Lang types are recognised:
-   UShort_Type UInteger_Type Double_Type _IntegerP_Type
-   FooBarStruct_Type [Struct_Type] Struct_Type FD_Type BString_Type
-   Integer_Type Null_Type Undefined_Type Char_Type Float_Type Array_Type
-   Short_Type Any_Type Assoc_Type Complex_Type Ref_Type String_Type
-   File_Type UChar_Type DataType_Type
+   Int32_Type UInteger_Type _IntegerP_Type
+   FooBarStruct_Type[Struct_Type] Int_Type Struct_Type ULong_Type
+   FD_Type Long_Type Float_Type Array_Type UInt32_Type File_Type
+   UInt_Type UChar_Type UShort_Type Double_Type Float64_Type
+   Float32_Type Int16_Type Null_Type Integer_Type BString_Type Char_Type
+   Undefined_Type Short_Type Any_Type Ref_Type Complex_Type Assoc_Type
+   String_Type UInt16_Type DataType_Type
 
   The following S-Lang namespaces have been bound to Perl:
 
@@ -286,7 +290,7 @@ the format C<< S-Lang name() -> Perl name() >>, even when the
 Perl and S-Lang names match (this may change).
 
 If you have a C<typedef> statement defining a "named" structure then
-the name of the structure will be followed by "[Struct_Type]", as with
+the name of the structure will be followed by C<[Struct_Type]>, as with
 the C<FooBarStruct_Type> variable type in the example above.
 
 The format of this section is liable to change; any suggestions

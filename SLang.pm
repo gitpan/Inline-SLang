@@ -25,7 +25,7 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS );
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 @ISA = qw(Inline DynaLoader Exporter);
 
 # since using Inline we can't use the standard way
@@ -322,7 +322,9 @@ sub build {
     # The list below is the remaining types - ie those we plan
     # to handle separately - either by using native Perl
     # types or hand-crafted classes
-    # (ignoring the fact that 12/14 are both UInteger_Type)
+    # - ignoring the fact that 12/14 are both UInteger_Type
+    #   and that some types are synonyms for others
+    #   [see the tortured internals of _sl_defined_types]
     #
     my %ignore = map { ($_,1); }
       (
@@ -338,6 +340,8 @@ sub build {
        'UShort_Type', 
        'UInteger_Type', 
        'Integer_Type', 
+       'Long_Type',
+       'ULong_Type',
        'String_Type', 
        'Float_Type', 
        'Struct_Type', 
@@ -347,6 +351,7 @@ sub build {
        );
 
     my $dtypes = Inline::SLang::_sl_defined_types();
+
     my $pl_code = "";
     while ( my ( $dname, $dref ) = each %$dtypes ) {
       # set up the function with a name equal to the data type
@@ -356,9 +361,13 @@ sub build {
       push @EXPORT_OK, $dname;
       push @{ $EXPORT_TAGS{types} }, $dname;
       $pl_code .= 
-	"sub Inline::SLang::$dname () { return DataType_Type->new('$dname'); }\n";
+	"sub Inline::SLang::$dname () { return DataType_Type->new('" .
+	($$dref[1]==2 ? $$dref[0] : $dname ).
+	"'); }\n";
 
-      next if exists $ignore{$dname};
+      # we do not want a class if we explicitly want to ignore it
+      # OR it's a class synonym (ie $$dref[1] == 2
+      next if exists $ignore{$dname} or $$dref[1] == 2;
 
       # create the Perl class code
       if ( $$dref[1] ) {
@@ -852,7 +861,7 @@ sub info {
     my $str = "";
     while ( my ( $dname, $dref ) = each %{ $o->{ILSM}{sl_types} } ) {
       my $curr = " $dname";
-      $curr .= " [Struct_Type]" if $$dref[1];
+      $curr .= "[Struct_Type]" if $$dref[1] == 1;
       if ( length($str) + length($curr) > 70 ) {
 	$info .= "$str\n";
 	$str = $curr;
