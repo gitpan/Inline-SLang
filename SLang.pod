@@ -28,8 +28,10 @@ Inline::SLang - Write Perl subroutines in S-Lang.
  # how PDL is supported (mainly the support for non 1D arrays/piddles)
  # is not finalised.
  #
- # This support does not work on Linux and OS-X machines so it
- # has been turned off by default in version 0.21
+ # As of version 0.24 the PDL support is turned back on by default for
+ # Solaris and Linux systems. There are still problems on OS-X machines
+ # (when converting S-Lang arrays to piddles), but it no longer crashes
+ # quite so spectacularly.
  #
 
 The C<Inline::SLang> module lets you write Perl subroutines in S-Lang.
@@ -367,6 +369,13 @@ errors can be handled by using Perl's C<eval> statement.
 =head1 CHANGES
 
 =over 2
+
+=item v0.24 Tue Apr 13 22:16:12 EDT 2004
+
+A one-line fix means that PDL support now works on Linux as well as
+Solaris. It works on OS-X until you try to convert a S-Lang array
+to a piddle. PDL support is now on by default for Solaris and Linux
+machines.
 
 =item v0.23 Wed Apr  7 21:32:07 EDT 2004
 

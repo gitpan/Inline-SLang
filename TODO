@@ -6,10 +6,13 @@ mean it is going to be worked on in the near (or far) future.
 PDL Support
 -----------
 
-- does not work on the Linux or OS-X systems I have available.
-  Something to do with how it interacts with the Inline code since
-  it's a problem when creating the configuration file/directory.
-  Awkward to debug.
+- Conversion of S-Lang arrays to piddles fails on OS-X; need to
+  investigate the assumptions in topdl.h (could be a symptom of the
+  following point).
+
+- need to test on a 64-bit machine to check that the assumptions I've made
+  about sizes of the various types is sensible. Or improve the code that
+  compares PDL and S-Lang datatype sizes.
 
 - piddles <-> S-Lang arrays for > 1D: how to handle the fact that
   S-Lang 2x3 is 3x2 to PDL:
@@ -24,10 +27,6 @@ PDL Support
     when copying over, rather than just doing a single memcpy() call.
 
 - Should we convert 0D piddles to S-Lang scalars or 1D, 1-element arrays?
-
-- need to test on a 64-bit machine to check that the assumptions I've made
-  about sizes of the various types is sensible. Or improve the code that
-  compares PDL and S-Lang datatype sizes.
 
 Other data types
 ----------------

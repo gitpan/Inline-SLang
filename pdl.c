@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * $Id: pdl.c,v 1.3 2003/08/19 03:36:35 dburke Exp $
+ * $Id: pdl.c,v 1.4 2004/04/14 02:08:26 dburke Exp $
  *
  * pdl.c
  *   PDL support for Inline::SLang (at least the utility functions,
@@ -34,8 +34,14 @@ static int needto_print_nd_warning_pdl   = 1;
  */
 void initialize_pdl_core( void ) {
 
-  /* a 'use PDL::LiteF;' in SLang.pm would be simpler... */
-  load_module( 0, newSVpv("PDL::Lite",0), NULL );
+  /*
+   * a 'use PDL::LiteF;' in SLang.pm would be simpler...
+   * - using a flags setting of 0 (ie rather than PERL_LOADMOD_NOIMPORT)
+   *   causes problems on OS-X and Linux [but not Solaris].
+   *   I find the perl docs on this somewhat opaque; this was the
+   *   first flag I guessed at using other than 0...
+   */
+  load_module( PERL_LOADMOD_NOIMPORT, newSVpv("PDL::Lite",0), NULL );
 
   /* 
    * this code fragment is essentially the output of:

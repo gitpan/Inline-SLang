@@ -25,7 +25,7 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS );
 
-$VERSION = '0.23';
+$VERSION = '0.24';
 @ISA = qw(Inline DynaLoader Exporter);
 
 # since using Inline we can't use the standard way

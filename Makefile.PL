@@ -17,9 +17,10 @@
 #       not sensible as I'm reluctant to cash many results)
 #    b) Other parts of the code still contain UNIX-isms
 #
-# for version 0.21 I have set PDL compilation to be off by default
-# since although I can get it to work on my solaris box there are
-# serious problems on linux and OS-X
+# for version 0.24 PDL support is available by default [if PDL is
+# installed] on Solaris and Linux systems only. There is a problem
+# converting S-Lang arrays to piddles on OS-X, so PDL support is of by
+# default on OS-X machines.
 #
 
 eval { "require 5.6.0" } or die <<EOD;
@@ -323,7 +324,8 @@ my $slangdir = "";
 my $slanglib = "";
 my $slanginc = "";
 my $pdl = 1;
-$pdl = 0;  # dbg: whilst PDL support is flaky we turn it off by default
+# dbg: PDL support is not yet rock solid
+$pdl = $^O eq "linux" || $^O eq "solaris" || 0;
 my $wall = 0;
 
 ## Search path for the S-Lang library
@@ -698,7 +700,7 @@ Options:
 $paths
   PDL support:
     --pdl     Turn on support for PDL if installed
-    --nopdl   Turn off support for PDL (default)
+    --nopdl   Turn off support for PDL
 
   debugging:
     --gdb     Turn on compiler's debugging flag (use my guess).
