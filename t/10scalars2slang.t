@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 20;
+use Test::More tests => 25;
 
 use Data::Dumper;
 
@@ -67,13 +67,17 @@ ok( !$ret1->is_struct_type, "and we are not a structure" );
 
 is( "$ret1", "Integer_Type",
 	"Able to 'stringify' the DataType_Type object" );
+ok( $ret1 == Inline::SLang::Integer_Type(), '  this is a repeat check' );
+ok( $ret1 != Inline::SLang::Null_Type(),    '  this is a repeat check' );
 
 foreach my $type ( qw( DataType_Type UChar_Type Any_Type Assoc_Type ) ) {
-    $ret1 = is_datatype(
-	$type,
-	DataType_Type->new( $type ) );
-    ok( $ret1, "Recognises as a datatype: $type" );
+    ok( is_datatype( $type, DataType_Type->new($type) ),
+	"Recognises as a datatype: $type" );
 }
+ok( is_datatype( "Integer_Type", Inline::SLang::Integer_Type() ), "Inline::SLang::Integer_Type ok" );
+
+ok( is_datatype( "FooFooStructType", DataType_Type->new("FooFooStructType") ), "named struct can be used as a datatype" );
+ok( is_datatype( "FooFooStructType", Inline::SLang::FooFooStructType() ), "named struct can be used as a datatype" );
 
 # no type
 $ret1 = DataType_Type->new();
@@ -101,7 +105,6 @@ define concatfoo () { variable str = (); return str + "foo"; }
 define is_complex (x) { return typeof(x) == Complex_Type; }
 define check_complex (x) { return x == 3 - 4i; }
 
-% let S-Lang handle the conversion of a datatype to a string
 define is_datatype (x,y) { return x == string(y); }
 
 %% check the stack (variable args)
@@ -135,3 +138,7 @@ define concatall () {
 % NULL value
 define sendnull(x) { return x==NULL; }
 
+% only used to test datatype handling
+typedef struct { a, b } FooFooStructType;
+
+% end

@@ -9,7 +9,8 @@ use strict;
 
 use Test::More tests => 139;
 
-use Inline 'SLang' => Config => EXPORT => [ qw( sl_array ) ];
+# we implicitly test support for !types here
+use Inline 'SLang' => Config => EXPORT => [ qw( sl_array !types ) ];
 use Inline 'SLang';
 
 use Data::Dumper;
@@ -85,7 +86,7 @@ like( $@, qr/^Error: get\(\) called with 3 coordinates but array dimensionality 
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Integer_Type"),1,3), 1,
+is( check_array($ret1,Integer_Type(),1,3), 1,
     "  and it seems to have the correct info" );
 ok( check_array1d($ret1), "  and the right values" );
 
@@ -135,7 +136,7 @@ like( $@, qr/^Error: get\(\) called with 1 coordinates but array dimensionality 
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Float_Type"),2,2,3), 1,
+is( check_array($ret1,Float_Type(),2,2,3), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d($ret1), "  [2D] and the right values" );
 
@@ -156,7 +157,7 @@ like( $@, qr/^Error: get\(\) called with 1 coordinates but array dimensionality 
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("String_Type"),0), 1,
+is( check_array($ret1,String_Type(),0), 1,
     "  [OD] and it seems to have the correct info" );
 
 ## Now a 3D array
@@ -175,7 +176,7 @@ ok( $ret1->get(0,1,0) == 10 && $ret1->get(0,2,1) == 21, "Some simple sets/gets w
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Short_Type"),3,1,3,2), 1,
+is( check_array($ret1,Short_Type(),3,1,3,2), 1,
     "  [3D] and it seems to have the correct info" );
 ok( check_array3d($ret1), "  [3D] and the right values" );
 
@@ -193,7 +194,7 @@ ok( $ret1->get(0,0,0,0) == -23.2, "Some simple sets/gets work" );
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Short_Type"),4,1,1,1,1), 1,
+is( check_array($ret1,Short_Type(),4,1,1,1,1), 1,
     "  [4D] and it seems to have the correct info" );
 ok( check_array4d($ret1), "  [4D] and the right values" );
 
@@ -201,15 +202,15 @@ ok( check_array4d($ret1), "  [4D] and the right values" );
 $ret2 = Array_Type->new( "DataType_Type", [2] );
 # note: could probably - with current internals - get away with
 #  sending in strings, but not sure I want to rely on this behaviour
-$ret2->set(0,DataType_Type->new("Complex_Type"));
-$ret2->set(1,DataType_Type->new("UShort_Type"));
+$ret2->set(0,Complex_Type());
+$ret2->set(1,UShort_Type());
 ok( isa_array($ret2), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret2,DataType_Type->new("DataType_Type"),1,2), 1,
+is( check_array($ret2,DataType_Type(),1,2), 1,
     "  [datatype array] and it seems to have the correct info" );
 ok( check_array1d_dt($ret2), "  [datatype array] and the right values" );
 
-$ret1 = DataType_Type->new( "Struct_Type" );
-$ret3 = DataType_Type->new( "Assoc_Type" );
+$ret1 = Struct_Type();
+$ret3 = Assoc_Type();
 ok( check_multi($ret1,$ret2,$ret3), "Stack seems okay" );
 
 # as an array reference -- ie not an Array_Type object
@@ -217,59 +218,59 @@ ok( check_multi($ret1,$ret2,$ret3), "Stack seems okay" );
 # 1) all integers
 $ret1 = [ -9, 4, 23 ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: Int_Type 1D" );
-is( check_array($ret1,DataType_Type->new("Integer_Type"),1,3), 1,
+is( check_array($ret1,Integer_Type(),1,3), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_int1d($ret1), "  and the right values" );
 
 # 2) all floats
 $ret1 = [ -9.0, 4.0, 23.0 ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: Double_Type 1D" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),1,3), 1,
+is( check_array($ret1,Double_Type(),1,3), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_dbl1d($ret1), "  and the right values" );
 
 # 3) all strings
 $ret1 = [ "-9.0", "4.0", "23.0" ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: String_Type 1D" );
-is( check_array($ret1,DataType_Type->new("String_Type"),1,3), 1,
+is( check_array($ret1,String_Type(),1,3), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_str1d($ret1), "  and the right values" );
 
 # 3) all complex number
 $ret1 = [ Math::Complex->make(4,-2.4), Math::Complex->make(-2.4,4) ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: Complex_Type 1D" );
-is( check_array($ret1,DataType_Type->new("Complex_Type"),1,2), 1,
+is( check_array($ret1,Complex_Type(),1,2), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_cpl1d($ret1), "  and the right values" );
 
 # 4) 2D integers (2x2)
 $ret1 = [ [ 0, 1 ], [4, 3 ] ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: Int_Type 2D" );
-is( check_array($ret1,DataType_Type->new("Int_Type"),2,2,2), 1,
+is( check_array($ret1,Integer_Type(),2,2,2), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_int2d($ret1), "  and the right values" );
 
 # 5) 2D floats (2x3)
 $ret1 = [ [-4.0,73], [ 0, 1 ], [4, 3 ] ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: Double_Type 2D" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,2), 1,
+is( check_array($ret1,Double_Type(),2,3,2), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_dbl2d($ret1), "  and the right values" );
 
 # 6) 6D int's (1x1x1x1x1x1)
 $ret1 = [ [ [ [ [ [ 24 ] ] ] ] ] ];
 ok( isa_array($ret1), "Can convert an array ref to a S-Lang array: Int_Type 6D" );
-is( check_array($ret1,DataType_Type->new("Int_Type"),6,1,1,1,1,1,1), 1,
+is( check_array($ret1,Integer_Type(),6,1,1,1,1,1,1), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_int6d($ret1), "  and the right values" );
 
 TODO: {
 	todo_skip "need clever type-checking of array refs", 3;
 
-	$ret1 = [-9,"foo",23.0,Math::Complex->new(4,-3),DataType_Type->new("Struct_Type")];
+	$ret1 = [-9,"foo",23.0,Math::Complex->new(4,-3),Struct_Type()];
 	ok( isa_array($ret1), "Can convert an array ref to a S-Lang array" );
 	print "Array reference: ", Dumper($ret1), "\n";
-	is( check_array($ret1,DataType_Type->new("Any_Type"),1,5), 1,
+	is( check_array($ret1,Any_Type(),1,5), 1,
 	    "  and it seems to have the correct info" );
 	ok( check_arrayref_any1d($ret1), "  and the right values" );
 }
@@ -298,7 +299,7 @@ ok( $ret1->get(0,0) == -49.0 &&
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,1), 1,
+is( check_array($ret1,Double_Type(),2,3,1), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d_b($ret1), "  [2D] and the right values" );
 
@@ -317,7 +318,7 @@ is( $ret3, 2, "2D array is 2D" );
 ok( eq_array( $ret2, [3,1] ), "  and is 3x1" );
 is( "$ret4", "Double_Type", "  and the type is Double_Type" );
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,1), 1,
+is( check_array($ret1,Double_Type(),2,3,1), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d_b($ret1), "  [2D] and the right values" );
 
@@ -330,7 +331,7 @@ is( $ret3, 2, "2D array is 2D" );
 ok( eq_array( $ret2, [3,1] ), "  and is 3x1" );
 is( "$ret4", "Double_Type", "  and the type is Double_Type" );
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,1), 1,
+is( check_array($ret1,Double_Type(),2,3,1), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d_b($ret1), "  [2D] and the right values" );
 
@@ -343,7 +344,7 @@ is( $ret3, 2, "2D array is 2D" );
 ok( eq_array( $ret2, [3,1] ), "  and is 3x1" );
 is( "$ret4", "Double_Type", "  and the type is Double_Type" );
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,1), 1,
+is( check_array($ret1,Double_Type(),2,3,1), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d_b($ret1), "  [2D] and the right values" );
 
@@ -356,7 +357,7 @@ is( $ret3, 2, "2D array is 2D" );
 ok( eq_array( $ret2, [3,1] ), "  and is 3x1" );
 is( "$ret4", "Double_Type", "  and the type is Double_Type" );
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,1), 1,
+is( check_array($ret1,Double_Type(),2,3,1), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d_b($ret1), "  [2D] and the right values" );
 
@@ -369,7 +370,7 @@ is( $ret3, 2, "2D array is 2D" );
 ok( eq_array( $ret2, [3,1] ), "  and is 3x1" );
 is( "$ret4", "Double_Type", "  and the type is Double_Type" );
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
-is( check_array($ret1,DataType_Type->new("Double_Type"),2,3,1), 1,
+is( check_array($ret1,Double_Type(),2,3,1), 1,
     "  [2D] and it seems to have the correct info" );
 ok( check_array2d_b($ret1), "  [2D] and the right values" );
 

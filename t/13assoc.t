@@ -5,8 +5,9 @@
 
 use strict;
 
-use Test::More tests => 68;
+use Test::More tests => 95;
 
+use Inline 'SLang' => Config => EXPORT => [ '!types' ];
 use Inline 'SLang';
 
 use Data::Dumper;
@@ -33,8 +34,7 @@ $ret1 = assocarray_uchar();
 print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [UChar_Type] converted to Assoc_Type object" );
 ok( UNIVERSAL::isa($ret1,"Assoc_Type"), "  checking the same thing" );
-# note: stringify is a private method, used here to make testing easier
-is( $ret1->_typeof()->stringify, "UChar_Type", "  and contains UChar_Type vars" );
+is( $ret1->_typeof(), UChar_Type(), "  and contains UChar_Type vars" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
      "   keys for assoc array are okay" );
 is( $$ret1{"a"},     1, "  key   a == 1" );
@@ -105,10 +105,10 @@ is( $ret3, 22.4,        'Returned: 3rd elem = real' );
 ( $ret1, $ret2, $ret3 ) = ret_assoc2();
 
 is( "$ret1", "Assoc_Type", "Assoc_Type [Assoc_Type] returned an Assoc_Type" );
-is( $ret1->_typeof->stringify, "Assoc_Type", "  and contains Assoc_Type" );
+is( $ret1->_typeof, Assoc_Type(), "  and contains Assoc_Type" );
 
 is( "$$ret1{any2}", "Assoc_Type", "  any2 contains Assoc_Type" );
-is( $$ret1{any2}->_typeof->stringify, "Any_Type", "    and it contans Any_Type" );
+is( $$ret1{any2}->_typeof, Any_Type(), "    and it contans Any_Type" );
 
 is( $$ret1{any2}{a}, "aa", "  and field a contains 'aa'" );
 is( $$ret1{any2}{"b b"}, 1.2, "  and field 'b b' contains 1.2" );
@@ -117,13 +117,13 @@ ok( eq_array( $$ret1{any2}{1}, [1,2,3,4] ),
     "  and field 1 contains [1:4]" );
 
 is( "$$ret1{uchar}", "Assoc_Type", "  uchar contains Assoc_Type" );
-is( $$ret1{uchar}->_typeof->stringify, "UChar_Type", "    and it contans UChar_Type" );
+is( $$ret1{uchar}->_typeof, UChar_Type(), "    and it contans UChar_Type" );
 is( $$ret1{uchar}{1}, 255, "  and field 1 contains 255" );
 
 ok( UNIVERSAL::isa($ret2,"DataType_Type"), "Stack handling good so far" );
 
 is( ref($ret3), "Assoc_Type", "Last item is an Assoc_Type array" );
-is( $ret3->_typeof->stringify, "Struct_Type", "  and contains Struct_Type" );
+is( $ret3->_typeof, Struct_Type(), "  and contains Struct_Type" );
 ok( eq_array( [ sort keys %{ $ret3 } ], ["a struct","foo"] ),
     "  with correct keys" );
 ok( $$ret3{foo}->is_struct_type, "  and foo is a struct" );
@@ -134,16 +134,18 @@ ok( $$ret3{"a struct"}->is_struct_type, "  and 'a struct' is a struct" );
 ok( eq_array( [ keys %{ $$ret3{"a struct"} } ], [ "qq", "pp" ] ) &&
     $$ret3{"a struct"}{qq} eq "alpha" &&
     UNIVERSAL::isa($$ret3{"a struct"}{pp},"DataType_Type") &&
-    $$ret3{"a struct"}{pp}->stringify eq "UInteger_Type",
+    $$ret3{"a struct"}{pp} eq UInteger_Type(),
     "  and 'a struct' contents are okay" );
 
 # and send it back to S-Lang
 ok( check_assoc2( $ret1, $ret2, $ret3 ), "And can convert stuff back to S-Lang" );
 
+# check using array references
+Inline::SLang::sl_array2perl( 0 );
 $ret1 = assocarray_array();
 print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [Array_Type] converted to Assoc_Type" );
-is( $ret1->_typeof->stringify, "Array_Type", "  and contents are Array_Type" );
+is( $ret1->_typeof, Array_Type(), "  and contents are Array_Type" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
     "   keys for assoc array are okay" );
 
@@ -157,7 +159,7 @@ ok( eq_array( $$ret1{"1"},   [0.5,1.0,1.5,2.0] ),
 $ret1 = assocarray_any1();
 print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [] converted to Assoc_Type" );
-is( $ret1->_typeof->stringify, "Any_Type", "  and it contains Any_Type" );
+is( $ret1->_typeof, Any_Type(), "  and it contains Any_Type" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
     "   keys for assoc array are okay" );
 
@@ -178,11 +180,66 @@ ok( check_hashref( DataType_Type->new(), $href, undef ),
     "Can convert a hash reference to S-Lang Assoc_Type [Any_Type]" );
 $ret1 = return_hashref($href);
 ok( UNIVERSAL::isa($ret1,"Assoc_Type"), "hash ref to S-Lang to Perl -> Assoc_Type" );
-is( $ret1->_typeof->stringify, "Any_Type", "  and type=Any_Type" );
+is( $ret1->_typeof, Any_Type(), "  and type=Any_Type" );
 
 is( $$ret1{aa}, "a a", "  and field 'aa' eq 'a a'" );
 is( $$ret1{"a string"}, 2.3, "  and field 'a string' == 2.3" );
 is( $$ret1{23}, 2, "  and field 'aa' == 2" );
+
+# check that other 'array convresion' strategies work okay
+#
+# Array_Type
+Inline::SLang::sl_array2perl( 1 );
+$ret1 = assocarray_array();
+##print "Assoc array:\n" . Dumper($ret1), "\n";
+is( ref($ret1), "Assoc_Type", "Assoc_Array [Array_Type] converted to Assoc_Type" );
+is( $ret1->_typeof, Array_Type(), "  and contents are Array_Type" );
+ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+    "   keys for assoc array are okay" );
+
+isa_ok( $$ret1{"a"},   "Array_Type" );
+isa_ok( $$ret1{"b b"}, "Array_Type" );
+isa_ok( $$ret1{"1"},   "Array_Type" );
+
+my ( $dims, $ndims, $atype );
+( $dims, $ndims, $atype ) = $$ret1{"a"}->array_info();
+is( $ndims, 1, "Array is 1D" );
+is( $$dims[0], 4, "  with 4 elements" );
+is( "$atype", "Integer_Type", "  and datatype Integer_Type" );
+ok( eq_array( $$ret1{"a"}->toPerl, [0,1,2,3] ),
+    '  key   a == [0,1,2,3]' );
+
+( $dims, $ndims, $atype ) = $$ret1{"b b"}->array_info();
+is( $ndims, 1, "Array is 1D" );
+is( $$dims[0], 4, "  with 4 elements" );
+is( "$atype", "Integer_Type", "  and datatype Integer_Type" );
+ok( eq_array( $$ret1{"b b"}->toPerl, [1,2,3,4] ),
+    '  key b b == [1,2,3,4]' );
+
+( $dims, $ndims, $atype ) = $$ret1{"1"}->array_info();
+is( $ndims, 1, "Array is 1D" );
+is( $$dims[0], 4, "  with 4 elements" );
+is( "$atype", "Double_Type", "  and datatype Double_Type" );
+ok( eq_array( $$ret1{"1"}->toPerl,   [0.5,1.0,1.5,2.0] ),
+    '  key   1 == [1,2,3,4]/2' );
+
+$ret1 = assocarray_any1();
+##print "Assoc array:\n" . Dumper($ret1), "\n";
+is( ref($ret1), "Assoc_Type", "Assoc_Array [] converted to Assoc_Type" );
+is( $ret1->_typeof, Any_Type(), "  and it contains Any_Type" );
+ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+    "   keys for assoc array are okay" );
+
+is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
+is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
+
+( $dims, $ndims, $atype ) = $$ret1{"1"}->array_info();
+is( $ndims, 1, "Array is 1D" );
+is( $$dims[0], 4, "  with 4 elements" );
+is( "$atype", "Integer_Type", "  and datatype Integer_Type" );
+ok( eq_array( $$ret1{"1"}->toPerl, [1,2,3,4] ),
+    '  key   1 == [1,2,3,4]' );
+
 
 __END__
 __SLang__

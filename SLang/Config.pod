@@ -11,13 +11,6 @@ works (in particular the section on "Configuration
 Options"). This document describes the options that are 
 available to configure the S-Lang interface.
 
- ***
- *** One possible option would be to allow the S-Lang code
- *** to be byte-compiled, which may provide a speed-improvement
- *** when loading. However, the speed improvement may not be
- *** worth the extra effort/checks necessary in the code.
- ***
-
 =head2 Options
 
 =head3 BIND_NS - what namespaces should be searched?
@@ -58,14 +51,15 @@ namespaces are placed into the Perl
 package whose name equals that of the S-Lang namespace
 (see below for examples). 
 This can be changed by supplying strings matching "foo=bar",
-which says to bind functions from the C<foo> namespace
-into the Perl package C<bar>. So,
+which says to bind S-Lang functions from the C<foo> namespace
+into the Perl package C<bar>. Therefore,
 
   BIND_NS => [ "Global=foo", "foo" ],
 
-will bind all S-Lang functions into the C<foo> package.
+will bind all S-Lang functions from the C<Global> and
+C<foo> namespaces into Perl's C<foo> package.
 
-Note that no checks are made for over-writing functions
+Note that B<no> checks are made for over-writing functions
 when they are bound to Perl. Also, if you are using this
 functionality you should probably be using the 2-argument
 form of S-Lang's C<import> and C<evalfile> commands
@@ -147,38 +141,38 @@ This option is used to give a list of S-Lang I<intrinsic>
 functions which are to be bound to Perl. The default value
 is B<[]>, i.e. no functions.
 
-Note that there are no checks on whether it makes sense
+Note that there are B<no> checks on whether it makes sense
 to bind the specified function, or whether it conflicts
-with an existing Perl function.
+with an existing Perl definition.
 
 =over 2
 
 =item Example of binding an intrinsic command into main:
 
- use Inline 'SLang' => Config => BIND_SLFUNCS => ["typeof"];
- use Inline 'SLang' => "define get_typeof(x) { typeof(x); }";
+  use Inline 'SLang' => Config => BIND_SLFUNCS => ["typeof"];
+  use Inline 'SLang' => "define get_typeof(x) { typeof(x); }";
 
- # both print
- #  The S-Lang type of 'foo' is String_Type
- printf "The S-Lang type of 'foo' is %s\n", get_typeof("foo");
- printf "The S-Lang type of 'foo' is %s\n", typeof("foo");
+  # both lines print
+  #  The S-Lang type of 'foo' is String_Type
+  printf "The S-Lang type of 'foo' is %s\n", get_typeof("foo");
+  printf "The S-Lang type of 'foo' is %s\n", typeof("foo");
 
 =item Example of binding an intrinsic command into the foo package:
 
- use Inline 'SLang' => Config =>
-   BIND_NS => "Global=foo",
-   BIND_SLFUNCS => ["typeof"];
- use Inline 'SLang' => "define pointless() { return NULL; }";
+  use Inline 'SLang' => Config =>
+    BIND_NS => "Global=foo",
+    BIND_SLFUNCS => ["typeof"];
+  use Inline 'SLang' => " ";
 
- # This also prints
- #  The S-Lang type of 'foo' is String_Type
- printf "The S-Lang type of 'foo' is %s\n", foo::typeof("foo");
+  # This also prints
+  #  The S-Lang type of 'foo' is String_Type
+  printf "The S-Lang type of 'foo' is %s\n", foo::typeof("foo");
 
 =back
 
-The reason for defining the C<pointless> function in the last
-example is to stop the C<Inline> module from complaining that
-you haven't actually written any S-Lang code to bind to Perl.
+The reason for giving C<" "> as the S-Lang code in the
+last example is to stop C<Inline> from complaining about being
+sent no code.
 
 =head3 EXPORT - how to export Perl functions from Inline::SLang
 
@@ -187,8 +181,11 @@ a number of utility routines that are - by default - only
 available using the fully-qualified package name. If you would
 rather use C<sl_array(...)> than C<Inline::SLang::sl_array(...)>
 then you can use the C<EXPORT> option.
+This resembles the standard Perl export mechanism but
+is not as feature rich.
 
-The available functions are:
+The available functions are (see
+L<Inline::SLang> for a detailed description):
 
 =over 4
 
@@ -200,19 +197,45 @@ converted to the correct array type and size in S-Lang.
 
 =item sl_eval()
 
-Call S-Lang's C<eval()> routine.
+Call S-Lang's C<eval()> routine and, on exit, convert the
+stack to Perl.
 
 =item sl_typeof()
 
 A wrapper around S-Lang's C<typeof()> routine. It is more
 efficient than using S-Lang's typeof routine.
 
+=item C<< <datatype name>() >>
+
+A function is created for each S-Lang datatype known about
+when the Perl code is executed (so this includes
+typedef-fed structures and any application-specific datatypes
+from imported modules). The name of the function matches the
+name of the S-Lang datatype and returns a Perl
+C<DataType_Type> object whose value matches the function
+name - so
+
+  Integer_Type()
+
+is just the same as calling
+
+  DataType_Type->new("Integer_Type");
+
+Note that this only holds for the "main" types; for
+synonyms - such as C<Int_Type> and C<Float32_Type> - you
+still have to use the C<DataType_Type> constructor.
+
 =back
 
-The option accepts a reference to an array that lists the
-names of the functions to export. For instance
+The C<EXPORT> option accepts a reference to an array that lists the
+names of the functions to export, e.g.
 
   use Inline 'SLang' => Config => EXPORT => [ "sl_array" ];
+
+If you want to export the datatype functions then you
+can either list the names of the required functions in
+the C<EXPORT> array or give the value C<!types> which
+includes them all.
 
 Note that we do not accept the full syntax of the
 L<Exporter|Exporter> module: the C<EXPORT> option
@@ -237,13 +260,13 @@ source code of the module):
   define bar(x) { foobar = x; }
   FOO
 
-The relevant part of the output (as of version 0.10) is:
+The relevant part of the output (as of version 0.11) is:
 
   Configuration details
   ---------------------
 
   Version of S-Lang: 1.4.8
-  Perl module version is 0.10
+  Perl module version is 0.11 with no support for PDL
 
   The following S-Lang types are recognised:
    UShort_Type UInteger_Type Double_Type _IntegerP_Type

@@ -94,6 +94,19 @@ when mapped to Perl, does not clobber an existing value
 So I<beware> when you define a S-Lang function called 
 C<open()>!
 
+=head3 But all I want to do is use this S-Lang module?
+
+If you have a S-Lang module that you want to use directly
+from Perl, it's as easy as the following (assuming the
+module is importable and called C<funkymodule>):
+
+  use Inline 'SLang' => 'import("funkymodule");';
+
+and then you can start using the functions defined
+by the module. You use a similar technique if you have
+a file containing S-Lang code that needs to be
+loaded via C<evalfile>.
+
 =head2 S-Lang Variables
 
 We currently do not bind any S-Lang variables to Perl.
@@ -105,7 +118,7 @@ C<foo()> and C<bar()> routines below:
   define foo()  { return foobar; }
   define bar(x) { foobar = x; }
 
-It should be possible to also bind variables, but this
+It I<should> be possible to also bind variables, but this
 is not a high priority (and may never be).
 
 =head2 Supported Data Types
@@ -117,7 +130,7 @@ where there is a direct match between S-Lang and Perl, the
 conversion is not noticeable. For more complicated
 types - such as complex numbers - S-Lang variables are
 converted to Perl objects.
-Where possible a I<perlish> interface is retained.
+Where possible a I<perl-like> interface is retained.
 See L<Inline::SLang::Types>
 for more information on how the various data types are
 supported.
@@ -133,6 +146,65 @@ using fully-qualified names - e.g. C<Inline::SLang::sl_eval()> -
 although the C<EXPORT> 
 L<configuration option|Inline::SLang::Config/EXPORT>
 can be used to change this.
+
+=head3 Inline::SLang::sl_array2perl
+
+=head4 Usage:
+
+  $val = Inline::SLang::sl_array2perl();
+  $val = Inline::SLang::sl_array2perl( $newval );
+
+Sets/Gets the current status of the "how do we convert
+a S-Lang array into Perl" flag. Returns the status.
+
+We list the possible values of the flag below.
+For further details on array support in C<Inline::SLang>
+see L<Inline::SLang::Array>.
+
+=head4 With no PDL support
+
+If PDL support was not compiled in to the module then
+the flag can either be 0 or 1, where
+
+=over 3
+
+=item 0
+
+All arrays are converted to a Perl array reference.
+
+=item 1
+
+All arrays are converted to a Perl C<Array_Type> object
+
+=back
+
+=head4 With PDL support
+
+If PDL support is available
+- version 0.11 does not include such support -
+then there are four options:
+
+=over 3
+
+=item 0
+
+All arrays are converted to a Perl array reference.
+
+=item 1
+
+All arrays are converted to a Perl C<Array_Type> object
+
+=item 2
+
+Numeric arrays are converted to piddles and
+non-numeric arrays are converted to a Perl array reference.
+
+=item 3
+
+Numeric arrays are converted to piddles and
+non-numeric arrays are converted to a Perl C<Array_Type> object.
+
+=back
 
 =head3 Inline::SLang::sl_array
 
@@ -163,8 +235,8 @@ be an array reference.
 
 Note that there is limited error checking in this routine:
 if C<$aref> is a 2x3 array but you send in C<$adims> as
-C<[3,2]> - or C<[24]> say - then expect weird behaviour
-at the very least. 
+C<[3,2]> - or C<[24]> say - then expect
+I<weird behaviour> (at the very least). 
 
 =head4 Example:
 
@@ -174,8 +246,8 @@ at the very least.
   some_slang_func( sl_array([[1.0,0.0],[0.0,1.0]],"Double_Type") );
 
 For numeric types I expect most people to use piddles
-(i.e. the L<Perl Data Language|PDL> support that is not yet
-available). This routine is more useful for arrays of
+(i.e. the L<Perl Data Language|PDL> support that is
+I<not yet> available). This routine is more useful for arrays of
 non-numeric data types.
 
 =head3 Inline::SLang::sl_eval
@@ -216,6 +288,15 @@ into C<sl_eval>?):
     eval( slcode );
   }
 
+=head3 Inline::SLang::sl_have_pdl
+
+=head4 Usage:
+
+  $flag = Inline::SLang::sl_have_pdl();
+
+Returns C<1> if the module was compiled with support
+for L<PDL|PDL::Intro>, and C<0> otherwise.
+
 =head3 Inline::SLang::sl_typeof
 
 =head4 Usage:
@@ -227,7 +308,7 @@ variable C<$var>. This should be more efficient than
 using S-Lang's C<typeof()> command since it does not
 require the conversion of the whole variable to S-Lang
 (normally not a big issue but it can be if C<$var> contains
-a large array or complicated structure).
+a large array or a complicated structure).
 
 The return value is an object of the C<DataType_Type>
 class; see L<PDL::Types|PDL::Types> for more information
@@ -243,56 +324,53 @@ Note that all objects used to represent S-Lang data types
 - other than C<Math::Complex> objects - have a C<typeof()>
 method which can be used to find the type of the object.
 
-=head1 SUPPORTED PLATFORMS
+=head3 Inline::SLang::sl_version
 
-I do not have the time to support anything but a recent version
-of S-Lang - defined as 1.4.7 or higher - on Solaris and Linux
-machines. This will hopefully extend to Mac OS X and Alpha
-machines in the near future.
+=head4 Usage:
 
-The code is I<NOT> guaranteed to work with an earlier version;
-in fact F<Makefile.PL> should have screamed at you and gone off
-in a sulk if you tried to build againt an earlier version.
+  $ver = Inline::SLang::sl_version();
 
-It is intended to support Perl versions >= 5.6.0 only (at least the
-release versions rather than the development releases). However note
-that the development is made using version 5.8.0, and so there
-may be subtle/hidden issues with the 5.6.x series of Perl.
-It is not
-clear yet whether we really need any >= 5.6.0 functionality, but this
-restriction does make testing/developing a lot easier for me.
-
-=head1 BUGS AND DEFICIENCIES
-
-This is I<alpha> release code. So, by design,
-there will be lots of bugs and deficiencies.
-
-Please use the CPAN Resource Tracker at
-http://rt.cpan.org/NoAuth/Bugs.html?Dist=Inline-SLang
-to check for bugs, report new ones, and request new features.
-
-=head1 SEE ALSO
-
-L<Inline::SLang::Config>, L<Inline::SLang::Types>, L<Term::Slang>
-
-For information about using C<Inline>, see L<Inline>.
-
-For information about other Inline languages, see L<Inline-Support>.
-
-For information about S-Lang see C<http://www.s-lang.org/>.
-
-=head1 ACKNOWLEDGEMENTS
-
-John Davis (for S-Lang), Brian Ingerson (for the Inline framework),
-and Neil Watkiss since I stole virtually everything from his
-L<Inline::Python> and L<Inline::Ruby> modules.
-
-However, please do not assume that any errors in this module are in
-any way related to the above people.
+Returns, as a string, the version of S-Lang
+against which the module was compiled, with a format
+of "a.b.c". You can use C<sl_eval("_slang_version_string")>
+to find out what version of the library
+you are using.
 
 =head1 CHANGES
 
 =over 2
+
+=item v0.11 Wed May  7 00:39:17 EDT 2003
+
+This release makes a couple of improvements to version I<0.10> and
+includes infrastructure changes to support L<PDL|PDL::Intro>
+(although piddles are still not supported). The major
+changes are:
+
+=over 2
+
+=item *
+
+S-Lang arrays can now be converted to the Perl C<Array_Type>
+object as well as array references. The behaviour is
+controlled by the C<Inline::SLang::sl_array2perl()> function,
+described in L<Inline::SLang|Inline::SLang>.
+
+=item *
+
+It is now easier to create Perl scalars that contain a 
+C<DataType_Type> object: use the functions
+C<< Inline::SLang::<datatype name>() >> instead of
+C<< DataType_Type->new( "<datatype name>" ); >>.
+Use C<'!types'> in the C<EXPORT> configuration option to
+import all these functions.
+
+=item *
+
+C<DataType_Type> objects can now be compared for equality 
+(C<==>, C<eq>) and inequality (C<!=>, C<ne>).
+
+=back
 
 =item v0.10 Sat May  3 19:39:00 EDT 2003
 
@@ -507,6 +585,53 @@ C<Inline::SLang::struct> objects.
 Initial public release
 
 =back
+
+=head1 SUPPORTED PLATFORMS
+
+I do not have the time to support anything but a recent version
+of S-Lang - defined as 1.4.7 or higher - on Solaris and Linux
+machines. This will hopefully extend to Mac OS X and Alpha
+machines in the near future.
+
+The code is I<NOT> guaranteed to work with an earlier version;
+in fact F<Makefile.PL> should have screamed at you and gone off
+in a sulk if you tried to build againt an earlier version.
+
+It is intended to support Perl versions >= 5.6.0 only (at least the
+release versions rather than the development releases). However note
+that the development is made using version 5.8.0, and so there
+may be subtle/hidden issues with the 5.6.x series of Perl.
+It is not
+clear yet whether we really need any >= 5.6.0 functionality, but this
+restriction does make testing/developing a lot easier for me.
+
+=head1 BUGS AND DEFICIENCIES
+
+This is I<alpha> release code. So, by design,
+there will be lots of bugs and deficiencies.
+
+Please use the CPAN Resource Tracker at
+http://rt.cpan.org/NoAuth/Bugs.html?Dist=Inline-SLang
+to check for bugs, report new ones, and request new features.
+
+=head1 SEE ALSO
+
+L<Inline::SLang::Config>, L<Inline::SLang::Types>, L<Term::Slang>
+
+For information about using C<Inline>, see L<Inline>.
+
+For information about other Inline languages, see L<Inline-Support>.
+
+For information about S-Lang see C<http://www.s-lang.org/>.
+
+=head1 ACKNOWLEDGEMENTS
+
+John Davis (for S-Lang), Brian Ingerson (for the Inline framework),
+and Neil Watkiss since I stole virtually everything from his
+L<Inline::Python> and L<Inline::Ruby> modules.
+
+However, please do not assume that any errors in this module are in
+any way related to the above people.
 
 =head1 AUTHOR
 

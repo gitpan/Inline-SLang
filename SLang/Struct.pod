@@ -53,11 +53,11 @@ distribution as F<examples/structs.pl> - is:
 =head1 DESCRIPTION
 
 S-Lang's structures can be thought of as "restricted"
-associative arrays, in that the keys are fixed (no adding or
+associative arrays, in that the keys are fixed (so no adding or
 deleting) and when you loop through them the order is
-set by the orer they are stored in the structure.
-So, we therefore convert S-Lang structures into
-C<Struct_Type> objects which behave like hash references
+set by the order they are given in the structure.
+So, we convert S-Lang structures into
+Perl C<Struct_Type> objects which behave like hash references
 (with some additional methods).
 
 To support "named" structures - i.e. those created using
@@ -66,7 +66,7 @@ we create sub-classes of the C<Struct_Type> class with
 names that match that of the structure. In this
 particular case that would be C<SomeName>.
 B<Note> that this only works for those typedef statements
-executed when the code is loaded; so if you call S-Lang's
+executed when the code is loaded; if you call S-Lang's
 C<eval()> function with a C<typedef> statement then 
 that structure name will I<not> be available as a Perl class.
 
@@ -74,7 +74,7 @@ Note that a bare hash reference is B<not> converted
 into a S-Lang structure since this is used to represent
 an associative array (see L<Inline::SLang::Assoc|Inline::SLang::Assoc>).
 
-=head2 The Struct_Type Class
+=head1 THE STRUCT_TYPE CLASS
 
 Once created, the Perl C<Struct_Type> class behaves 
 like a hash reference I<except> for the following:
@@ -98,7 +98,7 @@ to match that of the field names in the structure.
 =back
 
 The C<Struct_Type> class inherit the default methods
-of all the Inline::SLang objects, namely:
+of all the Inline::SLang classes, namely:
 
 =over 2
 
@@ -139,7 +139,7 @@ for this class:
 The constructor takes an array reference which contains
 the field names and returns an object in which the
 values of these fields are set to C<undef>.
-For "named" structs the field names array is not needed
+For "named" structs the field names array is not supported
 since the fields are fixed for these structures.
 
 The return value can be treated as a hash reference,
@@ -157,7 +157,7 @@ below to manipulate the contents of the array.
 The order of keys returned by the Perl hash iterators - such
 as C<each>, C<keys>, and C<values> - is set to the order
 of the fields in the structure. For this example
-it would be C<x>, C<a>, and C<one>.
+it would be C<x>, C<a>, and then C<one>.
 
 =item * C<get_field_names()>
 
@@ -173,7 +173,7 @@ using Perl's C<keys> routine.
   }
 
 There is no advantage to using this method
-rather than Perl's C<keys %$struct>.
+over Perl's C<keys %$struct>.
 
 =item * C<get_field( $field )>
 
@@ -188,7 +188,7 @@ C<struct_get_field()> routine.
   print "Field x has a value of ", $struct->get_field("x"), "\n";
 
 There is no advantage to using this method
-rather than Perl's C<$$struct{$key}>.
+over Perl's C<$$struct{$key}>.
 
 =item * C<set_field( $field, $value )>
 
@@ -202,15 +202,17 @@ C<struct_set_field()> routine.
   $struct->set_field( a => "hi there" );
 
 There is no advantage to using this method
-rather than Perl's C<$$struct{$key}>.
+over Perl's C<$$struct{$key}>.
 
 =back
 
 S-Lang's C<stuct_set_fields()> routine is currently
-not provided by the object but it's not hard to add (or to
+not provided by the class but it's not hard to add (or to
 emulate).
 
 =head2 Examples
+
+=head3 Using a named structure created in S-Lang
 
 Another simple example of using structures in Perl (this
 can be found in F<examples/types_struct.pl>) is shown below:
@@ -250,7 +252,8 @@ can be found in F<examples/types_struct.pl>) is shown below:
   print  " s.x    = $$s2{x}\n";
   print  " s.time = $$s2{time}\n";
 
-The output of the code is something like (depending on whether you keep
+The output of the code is going to look
+something like (depending on whether you keep
 sociable hours or not):
 
   ret1() returned a Struct_Type
@@ -264,9 +267,11 @@ sociable hours or not):
    s.x    = named struct example
    s.time = Sat May  3 03:46:01 2003
 
+=head3 Using a named structure created in Perl
+
 An example of creating a "named" structure from Perl
 (available as F<examples/named_struct.pl> in the
-source doe) is:
+source distribution) is:
 
   use Inline 'SLang' => <<'EOS';
   typedef struct { x, foo } My_Struct;

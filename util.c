@@ -10,8 +10,8 @@
  *  handler that croak's on error with the S-Lang error message.
  *  For the code in this file it might be beneficial to use a different
  *  error handler - since if there is an error message it will not make
- *  sense to the casual user [since it will come from the mucking around
- *  we do whilst converting between S-Lang and Perl representation.
+ *  sense to the casual user [as it will come from the mucking around
+ *  we do whilst converting between S-Lang and Perl representation].
  *  However, we don't do this at the moment.
  *
  *  [* unfortunately I don't think this means we can ignore the
@@ -80,8 +80,10 @@ _clean_slang_vars( int n ) {
  *
  *   - probably important to do integer/double/string check in
  *     that order due to Perl's DWIM-ery wrt types
+ *
+ * used by _guess_type in SLang.xs so can't be static
  */
-static SLtype
+SLtype
 pltype( SV *plval, int *flag ) {
 
   *flag = 1;
@@ -366,7 +368,8 @@ pl2sl_array( AV *array, AV *dims ) {
 
 } /* pl2sl_array() */
 
-void pl2sl_type( SV *item, SLtype item_type, int item_flag ) {
+void
+pl2sl_type( SV *item, SLtype item_type, int item_flag ) {
 
   if ( item_type == SLANG_NULL_TYPE ) {
     Printf( ("item=undef\n") );
@@ -619,7 +622,7 @@ void pl2sl_type( SV *item, SLtype item_type, int item_flag ) {
      *   but it will assume Integer_Type [2]
      *   also  something like [ 1, 2.3, "foo" ] is prob best
      *   converted as a String_Type array - this code selects Integer_Type
-     * >>>> WILL CHANGE <<<<
+     * >>>> will change at some point but not a high priority just now <<<<
      *
      * - see Array_Type
      *
@@ -690,7 +693,7 @@ void pl2sl_type( SV *item, SLtype item_type, int item_flag ) {
     }
     UTIL_SLERR(
       SLang_push_array( sl_dims, 1 ),
-      "Internal error: unable to push array onto S-Lang stack."
+      "Internal error: unable to push array onto the S-Lang stack."
     );
     (void) SLang_load_string( "$3=();$2=(); $1 = @Array_Type($2,$3);" );
 
@@ -739,6 +742,8 @@ pl2sl( SV *item ) {
 }
 
 #ifdef OLDCODE
+
+/* kept for reference for the moment */
 
 /*
  * utility routines for sl2pl()
@@ -991,20 +996,23 @@ sl2pl2D( SLang_Array_Type *at ) {
 
 #endif /* OLDCODE */
 
-static SV *
-_create_empty_array( int ndims, int *dims ) {
+SV *
+_create_empty_array( int ndims, int dims[] ) {
   AV *array;
   int dimsize = dims[0] - 1;
   long i;
 
   /* create the array */
   array = (AV *) sv_2mortal( (SV *) newAV() );
-  av_extend( array, (I32) dimsize );
 
   /* fill it in */
-  if ( ndims > 1 ) {
-    for ( i = 0; i <= dimsize; i++ ) {
-      av_store( array, i, _create_empty_array( ndims-1, dims+1 ) );
+  if ( ndims > 0 ) {
+    av_extend( array, (I32) dimsize );
+
+    if ( ndims > 1 ) {
+      for ( i = 0; i <= dimsize; i++ ) {
+	av_store( array, i, _create_empty_array( ndims-1, dims+1 ) );
+      }
     }
   }
 
@@ -1014,17 +1022,16 @@ _create_empty_array( int ndims, int *dims ) {
 		    
 /*
  * implement support for ND arrays using a generic interface
- * - ie do not use the C API as but use S-Lang
- * itself - which is not as efficient but handles everything.
+ * - ie do not use the C API as but use S-Lang itself -
+ * which is not as efficient but handles everything.
  * Support for specific types can be added later
- *
- * Called with array ON THE STACK
  *
  * NOTE:
  *   calling pl2sl() is a bit of a waste since we
- *   know the input type (ie te array type). A future
+ *   know the input type (ie the array type). A future
  *   improvement would be to allow the conversion to
- *   have a specified type [or some such thang]
+ *   have a specified type [or some such thang; similar to
+ *   the way we do the perl to slang conversion]
  *
  * NOTE:
  *   the following algorithm is a mess since we have the array
@@ -1034,7 +1041,8 @@ _create_empty_array( int ndims, int *dims ) {
  *
  */
 static SV *
-sl2pl_array( void ) { 
+sl2pl_array_aref( SLang_Array_Type *at ) {
+
   AV *aref[SLARRAY_MAX_DIMS];
   int dimsize[SLARRAY_MAX_DIMS], coord[SLARRAY_MAX_DIMS];
 
@@ -1044,56 +1052,30 @@ sl2pl_array( void ) {
   char *get_array_elem_str;
   SV *dval;
 
-  SLang_Array_Type *at = NULL;
+  SLtype dtype = at->data_type;
+  int    nelem = at->num_elements;
+  int    ndims = at->num_dims;
+  int   *dims  = at->dims;
 
-  long nelem;
-  I32 maxdim, i, j;
-  SLtype dtype;
-
-  Printf( ("  S-Lang stack contains: array  ") );
-
-  /*
-   * dup the array; set $1 to one of them and leave the
-   * other on the stack so we can pop it off
-   * - a bit of a mess!
-   */
-  (void) SLang_load_string( "dup();$1=();" );
-  UTIL_SLERR(
-    SLang_pop_array( &at, 0 ),
-    "Internal error - unable to pop duplicated array off the stack"
-  );
-
-  /*
-   * get useful info from the array structure
-   */
-  maxdim = at->num_dims - 1;
-  nelem  = at->num_elements;
-  dtype  = at->data_type;
-  Printf( (" num dims=%d  nelem=%d  type=%s\n",
-	   maxdim+1, nelem, SLclass_get_datatype_name(dtype)) );
+  int maxdim = ndims - 1;
+  int i, j;
 
   /*
    * set up the arrays for the loop
    *  1 - the actual data array
    *  2 - the arrays used to loop through it
    */
-  arrayref = _create_empty_array( at->num_dims, at->dims );
+  arrayref = _create_empty_array( ndims, dims );
 
-  for ( i = 0; i <= maxdim; i++ ) {
-    Printf( ("  *** dimension %d has size %d\n",i,at->dims[i]) );
+  for ( i = 0; i < ndims; i++ ) {
+    Printf( ("  *** dimension %d has size %d\n",i,dims[i]) );
     coord[i]   = 0;
-    dimsize[i] = at->dims[i] - 1;
+    dimsize[i] = dims[i] - 1;
     if ( i )
       aref[i] = (AV *) SvRV( *av_fetch( aref[i-1], 0, 0 ) );
     else
       aref[i] = (AV *) SvRV( arrayref );
   } 
-
-  /*
-   * can free up the array now (although will want to keep it around
-   * once we re-implement the type-specific routines)
-   */
-  SLang_free_array( at );
 
   /*
    * this is truly not wonderful: set up the string that
@@ -1118,17 +1100,28 @@ sl2pl_array( void ) {
   Printf( ("get str = [%s]\n",get_array_elem_str) );
 
   /*
+   * We need the array in $1 with the current code,
+   * so we have to push it back onto the stack but we do NOT
+   * free at
+   */
+  UTIL_SLERR(
+    SLang_push_array( at, 0 ),
+    "Internal error - unable to push array onto the S-Lang stack"
+  );
+  (void) SLang_load_string( "$1=();" );
+
+  /*
    * loop i=1 to nelem - see pl2sl_array() for more details
    */
   for ( i = 1; i < nelem; i++ ) {
-    Printf( ("  **** Setting %dD array elem %d coord=[",maxdim+1,i) );
+    Printf( ("  **** Setting %dD array elem %d coord=[",ndims,i) );
 
     /*
      * since we are about to call sl2pl() we push $1 onto the stack
      * to protect it. Then we push the coordinates, and then the
      * current data value
      */
-    for( j = 0; j <= maxdim; j++ ) {
+    for( j = 0; j < ndims; j++ ) {
       Printf( (" %d",coord[j]) );
       UTIL_SLERR(
 	SLang_push_integer(coord[j]),
@@ -1174,7 +1167,7 @@ sl2pl_array( void ) {
   } /* for: i=1 .. nelem-1
 
   /* handle the last element */
-  Printf( ("  **** Setting %dD array elem %d coord=[",maxdim+1,nelem) );
+  Printf( ("  **** Setting %dD array elem %d coord=[",ndims,nelem) );
   for( j = 0; j <= maxdim; j++ ) {
     Printf( (" %d",coord[j]) );
     UTIL_SLERR(
@@ -1194,7 +1187,51 @@ sl2pl_array( void ) {
   SvREFCNT_dec( get_array_elem_sv );
   return arrayref;
 
-} /* sl2pl_array() */
+} /* sl2pl_array_aref() */
+
+/*
+ * to reduce replicated code we delegate most of the conversion
+ * to sl2pl_array_aref() and then convert the array reference into
+ * an Array_Type object. It's somewhat wasteful since we have
+ * to find the dimensions and datatype again (especially as I'm
+ * just relying on sl_array() to do this in Perl).
+ */
+static SV *
+sl2pl_array_atype( SLang_Array_Type *at ) {
+  SV *aref = sl2pl_array_aref(at);
+  SV *obj;
+
+  /***
+      Should create the dims and datatype values and send to sl_array
+      so that things are converted properly (otherwise
+      UChar_Type -> Integer_Type etc)
+  ***/
+
+  Printf( ("Calling Inline::SLang::sl_array() to convert to Array_Type\n") );
+  {
+    int count;
+    dSP; ENTER; SAVETMPS; PUSHMARK(SP);
+    fixme( "memleaks?" );
+    //    XPUSHs( sv_2mortal(newSViv(maxdim)) );
+    XPUSHs( aref );
+    XPUSHs( sv_2mortal(newSVpv(SLclass_get_datatype_name(at->data_type),0)) );
+    PUTBACK;
+    count = call_pv( "Inline::SLang::sl_array", G_SCALAR );
+    SPAGAIN;
+    if ( count != 1 )
+      croak( "Internal error: unable to call Inline::SLang::sl_array()\n" );
+    fixme( "memleak?" );
+    obj = SvREFCNT_inc( POPs );
+    PUTBACK; FREETMPS; LEAVE;
+  }
+
+  return obj;
+} /* sl2pl_array_atype() */
+
+static SV *
+sl2pl_array_pdl( SLang_Array_Type *at ) {
+  croak( "ERROR: PDL support is not yet available, whatever the docs might say!" );
+} /* sl2pl_array_pdl() */
 
 /*
  * Convert S-Lang structs - including type-deffed ones
@@ -1217,6 +1254,7 @@ sl2pl_struct(void) {
   SV *fieldsref;
   AV *fields;
   int i, nfields;
+  int a2p_flag;
 
   Printf( ("  stack contains: structure - ") );
 
@@ -1236,11 +1274,22 @@ sl2pl_struct(void) {
    *   we take advantage of the S-Lang stack
    * - can't guarantee that $1 isn't going to get trashed when
    *   converting the array of strings, so we push it on
+   *
    */
   (void) SLang_load_string( "$1;get_struct_field_names($1);" );
 
-  /* convert the item on the stack (ie the field names) to a perl array */
+  /*
+   * convert the item on the stack (ie the field names) to a perl array
+   *
+   * NOTE:
+   *   since we are going to convert an array from S-Lang to
+   *   Perl we need to ensure that we do it as a array ref
+   *   whatever the user actually wants (and set it back later)
+   */
+  a2p_flag = _slang_array_format;
+  _slang_array_format = 0;
   fieldsref = sv_2mortal( sl2pl() );
+  _slang_array_format = a2p_flag;
   fields = (AV *) SvRV( fieldsref );
   nfields = 1 + av_len( fields );
   Printf( ("Number of fields in the structure = %d\n", nfields ) );
@@ -1356,24 +1405,26 @@ sl2pl_opaque(void) {
 } /* sl2pl_opaque() */
 
 /*
+ * Is the S-Lang datatype something that we can convert
+ * to a piddle?
+ *
+ * - need to sort out datatype sizes for piddles and
+ *   S-Lang numeric types
+ * - and perhaps we should return the type (rather than just
+ *   a yes/no here)?
+ */
+static int
+_convertable_to_pdl( SLtype type ) {
+  fixme( "need to write this!!!!!" );
+  return 0;
+}
+
+/*
  * convert S-Lang variables to perl variables
  */
 
-/*
- * convert the object on the S-Lang stack to
- * a perl object.
- *
- * The use of the S-Lang stack may limit recursion,
- * but it's easy to stick values back onto the S-Lang
- * stack. In fact, we make use of this when processing
- * certain types.
- */
-
 SV *
-sl2pl( void ) {
-
-  /* should we really be using SLtype instead of int? */
-  int type = SLang_peek_at_stack();
+sl2pl_type( SLtype type ) {
 
   /*
    * handle the various types
@@ -1389,7 +1440,6 @@ sl2pl( void ) {
       /* clear out the stack, assume it works */
       (void) SLdo_pop_n(1);
       return &PL_sv_undef;
-      break;
     } /* NULL */
 
     /* integers */
@@ -1460,7 +1510,63 @@ sl2pl( void ) {
 
   case SLANG_ARRAY_TYPE:
     {
-      return sl2pl_array();
+      SV *out;
+      SLang_Array_Type *at = NULL;
+      int is_numeric;
+
+      Printf( ("  S-Lang stack contains: array  ") );
+
+      UTIL_SLERR(
+	SLang_pop_array( &at, 0 ),
+	"Internal error - unable to pop duplicated array off the stack"
+      );
+      Printf( (" num dims=%d  nelem=%d  type=%s\n",
+	       at->num_dims, at->num_elements,
+	       SLclass_get_datatype_name(at->data_type)) );
+
+      /*
+       * Output is one of the following - determined by the
+       * value of the variable _slang_array_format:
+       *
+       *       Non-numeric        Numeric
+       *   0 - array ref          -
+       *   1 - Array_Type         -
+       *   2 - array ref          piddle
+       *   3 - Array_Type         piddle
+       *
+       * could do comparison by bit manipulation
+       */
+
+      switch ( _slang_array_format ) {
+        case 0:
+	  out = sl2pl_array_aref( at );
+          break;
+        case 1:
+	  out = sl2pl_array_atype( at );
+          break;
+        case 2:
+          is_numeric = _convertable_to_pdl( at->data_type );
+          if ( is_numeric )
+	    out = sl2pl_array_pdl( at );
+          else
+	    out = sl2pl_array_aref( at );
+          break;
+        case 3:
+          is_numeric = _convertable_to_pdl( at->data_type );
+          if ( is_numeric )
+	    out = sl2pl_array_pdl( at );
+          else
+	    out = sl2pl_array_atype( at );
+          break;
+      }
+
+      /*
+       * can free up the array now (although will want to keep it around
+       * once we re-implement the type-specific routines)
+       */
+      SLang_free_array( at );
+
+      return out;
 
     } /* SLANG_ARRAY_TYPE */
 
@@ -1603,5 +1709,24 @@ sl2pl( void ) {
 
     } /* default */
   }
+
+} /* sl2pl_type() */
+
+/*
+ * convert the object on the S-Lang stack to
+ * a perl object.
+ *
+ * The use of the S-Lang stack may limit recursion,
+ * but it's easy to stick values back onto the S-Lang
+ * stack. In fact, we make use of this when processing
+ * certain types.
+ */
+
+SV *
+sl2pl( void ) {
+
+  /* should we really be using SLtype instead of int? */
+  int type = SLang_peek_at_stack();
+  return sl2pl_type( type );
 
 } /* sl2pl() */

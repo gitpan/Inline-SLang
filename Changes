@@ -1,6 +1,40 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.11
+date:    Wed May  7 00:39:17 EDT 2003
+changes:
+
+- S-Lang arrays can now be converted to Array_Type objects as well
+  as array references. Use the Inline::SLang::sl_array2perl()
+  function (described in the Inline::SLang manpage) to control how
+  arrays are converted.
+
+- Added functions called Inline::SLang::<datatype name>() that return
+  a DataType_Type object whose value matches the given datatype. These
+  can be imported via the EXPORT array individually or by using '!types'.
+  This means you can say
+    Integer_Type()
+  rather than
+    DataType_Type->new("Int_Type")
+  [unfortunately there are no functions for type "synonyms" like 'Int_Type'].
+
+- DataType_Type objects can now be compared for equality and inequality
+  (i.e. the ==, eq, !=, and ne operators).
+
+- Added Inline::SLang::sl_have_pdl() and Inline::SLang::sl_version()
+  functions that return information about how the module was compiled.
+
+- changed storage mechanism for "opaque" types; should be better behaved
+  when converting a large array of such items.
+
+- re-arranged some of the internals to take advantage of recent changes
+  or make them more robust/maintainable. Should be no user-visible changes.
+
+- we no longer allow the S-Lang namespace "_inline" to be bound to Perl
+  (this namespace is for use only by the module).
+
+--
 version: 0.10
 date:    Sat May  3 19:39:00 EDT 2003
 changes:

@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 34;
+use Test::More tests => 37;
 
 use Data::Dumper;
 
@@ -101,9 +101,23 @@ print Dumper($ret[0]), "\n";
 
 is ( $#ret, 5, "num of datatypes is 6" );
 isa_ok( $ret[0], "DataType_Type" );
+
+# check them via stringification and via equality
 is ( join( " ", map { "$_"; } @ret ),
   	"UChar_Type Short_Type Float_Type String_Type DataType_Type Null_Type",
 	'DataType values are converted correctly' );
+
+# test loading into main package somewhere in the 20's
+my $sum = 0;
+$sum += $ret[0] == Inline::SLang::UChar_Type();
+$sum += $ret[1] eq Inline::SLang::Short_Type();
+$sum += $ret[2] == Inline::SLang::Float_Type();
+$sum += $ret[3] eq Inline::SLang::String_Type();
+$sum += $ret[4] == Inline::SLang::DataType_Type();
+$sum += $ret[5] eq Inline::SLang::Null_Type();
+is ( $sum, 6, '  testing equality of data types' );
+ok ( $ret[0] != $ret[1], '  and inequality of differnt types' );
+ok ( $ret[0] ne $ret[2], '  and inequality of differnt types' );
 
 ## mixed types
 # - mainly just to check out the stack-handling code

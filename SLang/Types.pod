@@ -41,15 +41,16 @@ distribution as F<examples/types.pl> - is:
 
 =head1 DESCRIPTION
 
-The aim is to allow a user to program "naturally" in Perl
-and S-Lang, and so native data types are used wherever
-possible. However, objects are used when necessary
-- for some ill-defined definition of necessary - to preserve type
+The aim of the type-handling in C<Inline::SLang>
+is to allow a user to program "naturally" in Perl
+and S-Lang - i.e. to take advantage of the strengths
+of each language - 
+and so native data types are used wherever
+possible.
+However, Perl objects (classes defined in this
+module) are used when necessary
+- for some I<poorly defined> definition of necessary - to preserve type
 information.
-The type system is also changing as I use the
-module more and come across things that seemed fine when
-designing the module but are just annoying to use
-(hopefully there won't be too many of these changes).
 
 As an example, consider swapping a complex
 number between S-Lang and Perl. In S-Lang it would be represented
@@ -60,7 +61,7 @@ been used, but then we would not be able to convert it
 back into a C<Complex_Type> variable in S-Lang (well, not
 without telling the computer this is what we wanted).
 
-I promise that soon (not many more releases after v0.10)
+I promise that soon (not many more releases after v0.11)
 the module will support
 L<the Perl Data Language (ie PDL)|PDL>,
 since it provides variables ("piddles") which retain
@@ -74,7 +75,8 @@ synonyms for a type, although they are recognised;
 for instance the C<Int_Type> is accepted but converted to
 C<Integer_Type>.
 
-See L<below|/"DATATYPE CLASSES"> for further details.
+See L<the "DATATYPE CLASSES" section below|/"DATATYPE CLASSES">
+for further details.
 
 =over 4
 
@@ -116,7 +118,9 @@ Array_Type
 
 Converted to one of: a Perl array reference,
 an C<Array_Type> object, or a I<piddle>.
-Currently only the Perl array reference is supported.
+
+Actually, the support for piddles is
+not-yet available (version 0.11).
 
 =item *
 
@@ -136,16 +140,25 @@ as the S-Lang struct name.
 =item *
 
 Other S-Lang types are converted to a Perl class
-that matches the S-Lang type name.
+that matches the name of the S-Lang datatype. They are then
+treated in Perl as I<opaque> objects, in that
+you can pass them back to S-Lang and let it
+access their contents but you can not do anything
+else with them in Perl.
 
 =back
 
 =head2 Supported Perl Data Types
 
 The following data types may be passed from Perl into S-Lang. Any
-other type results in the Perl interpreter issuing a C<croak>.
+other type results in the Perl interpreter issuing a C<croak>;
+we could create an I<opaque> datatype to store such values
+- much as we do when we come across a S-Lang datatype that we
+don't recognise - but this would only be useful if we also
+allow Perl to be embedded into S-Lang.
 
-See L<below|/"DATATYPE CLASSES"> for further details.
+See L<the "DATATYPE CLASSES" section below|/"DATATYPE CLASSES">
+for further details.
 
 =over 4
 
@@ -153,62 +166,68 @@ See L<below|/"DATATYPE CLASSES"> for further details.
 
 undef
 
-Converted to C<NULL>.
+Converted to C<NULL> (i.e. S-Lang's C<Null_Type> datatype).
 
 =item *
 
 Integer
 
-Converted to S-Lang C<Integer_Type>.
+Converted to S-Lang's C<Integer_Type>.
 
 =item *
 
 Floating Point
 
-Converted to S-Lang C<Double_Type>.
+Converted to S-Lang's C<Double_Type>.
 
 =item *
 
 C<Math::Complex>
 
-Converted to S-Lang C<Complex_Type>.
+Converted to S-Lang's C<Complex_Type>.
 
 =item *
 
 String
 
-Converted to S-Lang C<String_Type>.
+Converted to S-Lang's C<String_Type>.
 
 =item *
 
 Array reference
 
-Converted to S-Lang C<Array_Type>.
+Converted to a S-Lang array with (hopefully)
+the correct datatype and dimensionality.
 
 =item *
 
 Perl C<Array_Type> object
 
-Converted to S-Lang C<Array_Type>.
+Converted to a S-Lang array with datatype
+and dimensionality matching that of the Perl
+object.
 
 =item *
 
 Piddles
 
-Will be converted to S-Lang C<Array_Type>.
-NOT YET AVAILABLE.
+Will be be converted to a S-Lang array with datatype
+and dimensionality matching that of the Perl
+object.
+
+B<NOT YET AVAILABLE>.
 
 =item *
 
 Hash reference
 
-Converted to S-Lang C<Assoc_Type [Any_Type]>.
+Converted to S-Lang's C<Assoc_Type [Any_Type]>.
 
 =item *
 
 Perl C<Assoc_Type> object.
 
-Converted to S-Lang C<Assoc_Type> with
+Converted to S-Lang's C<Assoc_Type> with
 the datatype of the array being determined by the
 contents of the object.
 
@@ -235,10 +254,11 @@ Objects are used to represent those S-Lang data types for
 which there is no corresponding Perl data type:
 for complex numbers we use the L<Math::Complex|Math::Complex> 
 module which is distributed with Perl;
-for numeric types we may use piddles (see the documentation 
-for the L<Perl Data Language|PDL>);
+arrays can be handled in a variety of ways - as a perl array
+reference, an C<Array_Type> object, or a piddle
+(see the documentation for the L<Perl Data Language|PDL::Intro>);
 and for other types we use a class specific to
-Inline::SLang.
+C<Inline::SLang>.
 
 =over 2
 
@@ -264,10 +284,12 @@ are represented using
 C<XXX> objects in Perl; these objects are
 sub-classes of the C<Struct_Type> class.
 The objects behave similarly to a hash reference, except that
-you can not add or delete keys and there are a number
+you can not add or delete keys, the order of
+the keys is fixed to match that of the structure,
+and there are a number
 of method calls that match the S-Lang language.
 
-See L<Inline::SLang::Struct|Inline::SLang::Struct> for
+See L<Inline::SLang::Struct> for
 more information.
 
 =item *
@@ -276,10 +298,10 @@ Associative arrays
 
 S-Lang associative arrays (C<Assoc_Type>) are represented
 in Perl as C<Assoc_Type> objects. These objects behave just
-as a hash reference does but have additional methods to
+as hash references do but have additional methods to
 match the S-Lang language.
 
-See L<Inline::SLang::Assoc|Inline::SLang::Assoc> for
+See L<Inline::SLang::Assoc> for
 more information.
 
 =item *
@@ -298,17 +320,18 @@ As a Perl array reference.
 
 As a piddle (if you are using the L<Perl Data Language|PDL::Intro>).
 
-This is NOT YET AVAILABLE.
+This is B<NOT YET AVAILABLE>.
 
 =item 3
 
 As a Perl C<Array_Type> object.
 
-It is expected that this object will only be used rarely.
+It is expected that this object will I<rarely> be used,
+at least directly.
 
 =back
 
-See L<Inline::SLang::Array|Inline::SLang::Array> for
+See L<Inline::SLang::Array> for
 more information.
 
 =item *
@@ -316,7 +339,8 @@ more information.
 S-Lang data type.
 
 S-Lang C<Datatype_Type> values are represented using
-Perl C<DataType_Type> objects.
+Perl C<DataType_Type> objects, which are described
+below.
 
 =item *
 
@@ -359,27 +383,24 @@ All classes provide the following methods:
 
 =over 2
 
-=item o
+=item *
 
 typeof()
 
-Returns a string containing the name of the S-Lang datatype
-of the object (which corresponds to the name of the
-Perl class).
+Returns a C<DataType_Type> object which contains the
+the S-Lang datatype of the object. This object will
+return the name of the datatype when converted to a string.
 
-=item o
+=item *
 
 stringify()
 
 The "print" method for the objects has been 
 over-loaded to use the C<stringify()> method:
-for most - probably all - types it will return the datatype name (namely
-the output of the C<typeof()> method).
+for most - probably all - types it will return the
+datatype name.
 
-The class descriptions below describe the output format
-if it does not match that of the C<typeof()> method.
-
-=item o
+=item *
 
 is_struct_type()
 
@@ -403,9 +424,30 @@ See L<Inline::SLang::Struct|Inline::SLang::Struct>.
 
 =head2 DataType_Type Objects
 
+Although you can use the C<new()> constructor described
+below to create a C<DataType_Type> variable, it is
+easier just to call the given type as a function.
+If you have specified C<!types> as a value in
+the C<EXPORT> configuration option (see
+L<Inline::SLang::Config> for more details) then
+you can just say:
+
+  my $var = Integer_Type();
+
+otherwise you have to include the package name, as in
+the following
+
+  my $var = Inline::SLang::Integer_Type();
+
+Note that even though the functions take no arguments
+you have to supply the C<()> in order for Perl to
+recognise it as a function.
+The return value (C<$var> here) can be used just
+as the output of C<< DataaType_Type->new() >> can.
+
 The class-specific methods are:
 
-=over 4
+=over 2
 
 =item new()
 
@@ -440,23 +482,21 @@ outputs
 
 =back
 
+The equality and inequality operators - namely
+C<==>, C<eq>, C<ne>, and C<!=> - have been over-ridden to
+work for variables containing C<DataType_Type> objects.
+So you can say:
+
+  my $val = some_function_call();
+  print "Got a S-Lang array\n" if
+    $val->typeof == Array_Type(); 
+
 To see a list of all the possible datatypes
 recognised by a particular program use the
 C<INFO> option provided by L<the Inline module|Inline>,
 as described in the
 L<"What functions and namespaces have been bound to Perl?"|Inline::SLang::Config/"What functions and namespaces have been bound to Perl?">
 section of Inline::SLang::Config.
-
-A possible future enhancement is to provide
-a set of functions that match the datatype name
-and that return a C<DataType_Type> object of the
-given class. This would then allow you to say
-
-  Integer_Type()
-
-rather than
-
-  DataType_Type->new("Integer_Type")
 
 =head2 Other objects - aka "opaque" variables
 

@@ -43,38 +43,16 @@ different, which makes converting arrays between the two
 languages a bit more awkward than with many of the
 other data types.
 
-There are three different ways that a S-Lang array
-can be represented in Perl:
+We admit three different array representations in Perl:
+Perl's array references; as an C<Array_Type> object
+(this class is a part of the C<Inline::SLang> package);
+and as a piddle (the fundamental object of
+the L<Perl Data Language|PDL::Intro> which is the 
+suggested method to analyze large numeric arrays in Perl).
+Before discussing this I want to talk about
+going the "other way".
 
-=over 4
-
-=item 1
-
-As a reference to a Perl array.
-
-=item 2
-
-As a piddle (see the L<Perl Data Language|PDL::Intro>
-documentation) for numeric types. 
-
-At the moment this option is NOT IMPLEMENTED. It will
-be soon.
-
-=item 3
-
-As an C<Array_Type> object.
-
-=back
-
-In most cases the first two representations are likely
-to be the ones you use; the use of an C<Array_Type>
-object is only needed when it is I<hard> for the code to
-guess the type/dimensionality of an array.
-
-The C<SOME_UNNAMED_FUNCTION> is used to define how
-S-Lang arrays are converted to Perl.
-
-=head2 Things to remember when converting arrays
+=head2 Things to remember when converting arrays to S-Lang
 
 Consider the following Perl array reference:
 
@@ -89,18 +67,27 @@ following arrays:
   Array_Type   [3]
   Any_Type     [3]
 
-The PDL officionado would also claim that it could be
-represented as an C<Integer_Type [2,3]> array!
+Note that this does B<not> match the way that
+PDL represents array (which would consider this
+to be a C<2x3> array). This may cause issues when
+support for piddles is added.
 
 Admittedly most of these are unlikely, but the point is
-that they are all valid representations, which makes
+that they are all I<valid> representations, which makes
 automatically converting such an item to S-Lang awkward.
 
 As discussed below it is possible to provide extra 
-information (the type and/or dimension sizes) to help
+information (the type and/or dimensionality of the array) to help
 the conversion - using an C<Array_Type> object or the
 C<Inline::SLang::SL_array()> function - but hopefully the
-guesses the code makes will be suficient.
+guesses the code makes will be sufficient.
+
+=head3 How do we guess the array?
+
+If the array is stored as a I<piddle> or an C<Array_Type>
+object then the computer can find out the information
+without guessing, so the following is only relevant
+when an I<array reference> is used.
 
 When given an array reference, the code looks at the
 first element to decide what type of array it is: if
@@ -111,7 +98,7 @@ to determine the type of the array - so it should come out
 as C<Integer_Type> - and the array dimensions are taken to
 be C<[3,2]>.
 
-=head3 How to confuse the array conversion (by data type)
+=head4 How to confuse the array conversion (by data type)
 
 Since the code only looks at the first element in the
 array to guess the type it is not too hard to come across
@@ -132,31 +119,33 @@ this could be a large performance hit for large
 arrays and the current advice is to use one of the 
 techniques we describe below.
 
-=head3 How to confuse the array conversion (by data size)
+=head4 How to confuse the array conversion (by array size)
 
 The code assumes that the array dimensions it calculates
 hold for all elements. If they don't then you will see 
-error messages (possibly strange ones at that).
+error messages (quite possibly strange ones at that).
 As an example,
 
   [ [ 2, 1 ], [1] ]
 
-is guaranteed not to be liked by the code.
+is guaranteed not to be liked by the code; on my machine
+it dislikes it so much that it causes a B<segmentation fault>.
 
-=head3 Helping the code out by telling it about the array
+=head3 How can I help?
 
 If you know the array size and/or type then you can use
 the C<Inline::SLang::sl_array()> function to help the
 code out. As an example (see also F<examples/array_help.pl>):
 
-  use Inline 'SLang' => Config => EXPORT => [ 'sl_array' ];
+  use Inline 'SLang' => Config => EXPORT =>
+       [ 'sl_array', 'Integer_Type' ];
   use Inline 'SLang';
 
   my $aref = [ 1, 3, 2 ];
   foo( $aref );
   foo( sl_array( $aref, "Int_Type" ) );
   foo( sl_array( $aref, [3] ) );
-  foo( sl_array( $aref, [3], "Int_Type" ) );
+  foo( sl_array( $aref, [3], Integer_Type() ) );
 
   __END__
   __SLang__
@@ -167,8 +156,14 @@ which produces four lines saying
 
   Array has type: Integer_Type
 
-Unfortunately you can I<not> use this mechanism to
-typecast the array. If you replace C<Int_Type> with C<String_Type> 
+Note that I snuck in an example of using an
+automatically-generated wrapper around the C<DataType_Type>
+constructor - the C<Integer_Type()> function in the last call
+to C<foo()>.
+
+Unfortunately you can I<not> use C<sl_array()> to
+typecast the array: at least not at the moment.
+If you replace C<Int_Type> with C<String_Type> 
 in the above then you will come across the following error
 message
 
@@ -178,9 +173,92 @@ even though Perl can happily treat 1 as an integer or
 a string. Suggestions on how to handle this case are welcome.
 
 The C<sl_array()> function is actually a wrapper around the
-constructor call for the C<Array_Type> class.
+constructor call for the C<Array_Type> class which tries to guess
+the array type and size if they have not been supplied.
 
-=head2 The Array_Type Class
+=head2 Things to remember when converting arrays to Perl
+
+There are three different ways that a S-Lang array
+can be represented in Perl:
+
+=over 4
+
+=item 1
+
+As a reference to a Perl array.
+
+=item 2
+
+As a piddle (see the L<Perl Data Language|PDL::Intro>
+documentation) for numeric types. 
+
+At the moment this option is NOT IMPLEMENTED. It will
+be soon, once I start thinking about the sizes of datatypes.
+What fun.
+
+=item 3
+
+As an C<Array_Type> object.
+
+=back
+
+In most cases the first two representations are likely
+to be the ones you use; the use of an C<Array_Type>
+object is only needed when it is I<hard> for the code to
+guess the type/dimensionality of an array.
+
+The C<Inline::SLang::sl_array2perl()> function
+is used to define how S-Lang arrays are converted to
+Perl, and to find out what the current conversion
+system is. This function is described in
+L<Inline::SLang>.
+
+=head3 Example
+
+  use Inline 'SLang' => Config => EXPORT => [ 'sl_array2perl' ];
+  use Inline 'SLang';
+
+  # use array references for all S-Lang arrays
+  sl_array2perl(0);
+  my $a0 = get_array();
+  print "Array returned as an " . ref($a0) . "\n";
+  print "  dim size = " . (1+$#$a0) . "\n";
+
+  # use Array_Type for all S-Lang arrays
+  sl_array2perl(1);
+  my $a1 = get_array();
+  print "Array returned as an " . ref($a1) . "\n";
+  my ( $dims, $ndim, $atype ) = $a1->array_info();
+  print "  dim size = $$dims[0]\n";
+  print "  type     = $atype\n";
+
+  # use a piddle (assumes Inline::SLang::sl_have_pdl() == 1)
+  sl_array2perl(2);
+  my $a2 = get_array();
+  print "Array returned as an " . ref($a1) . "\n";
+  print "  dim size = " . $a2->getdims(0) . "\n";
+  print "  type     = " . $a2->type . "\n";
+
+  __END__
+  __SLang__
+
+  define get_array() { return [ 14.0, 3 ]; }
+
+This example is available as F<examples/array_conversion.pl>
+in the source distribution.
+When run this outputs:
+
+  Array returned as an ARRAY
+    dim size = 2
+  Array returned as an Array_Type
+    dim size = 2
+    type     = Double_Type
+  Error: sl_array2perl() can only be sent an integer between 0 and 1 (inclusive) at examples/array_conversion.pl line 21.
+
+The error message is because (as of version 0.11) we do not
+support PDL. We will do soon.
+
+=head1 THE ARRAY_TYPE CLASS
 
 The Perl C<Array_Type> class stores the datatype and
 dimensionality of an array along with the data.
@@ -235,8 +313,8 @@ containing the data to be stored in the array.
 Note that in this case we just copy the array reference
 and B<not> the actual data stored in this array. This
 means that you can change the data stored in the
-object: iseful but also liable to lead to crashes or
-bizarre errors.
+object: useful but can cause bizarre behaviour for the
+unwary.
 
   my $arr1 = Array_Type->new( "Int_Type", [3,2] );
   my $arr2 = Array_Type->new(
@@ -294,7 +372,8 @@ to the specified value. It returns this value.
 Note that there is no check made that the datatype
 of the new value matches that of the array. You
 will find out about this when you try to convert the
-array to S-Lang.
+array to S-Lang. Probably with a rather unfriendly
+message.
 
 =item * C<toPerl()>
 
@@ -303,7 +382,7 @@ are very limited, the C<toPerl()> can be used
 to get an array reference to the actual data. This
 can then be used as you would any other Perl array
 reference. If you change the array size then
-you are going to make te object unhappy, so take care.
+you are going to make the object unhappy, so take care.
 
   my $arr1 = Array_Type->new( "Int_Type", [3,2] );
   my $dref = $arr1->toPerl();

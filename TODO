@@ -13,10 +13,6 @@ Tests
 S-Lang to Perl
 --------------
 
-  - the internal storage mechanism used to store "opaque" types is
-    really inefficient when handled an array of such objects - we need
-    a "random" key
-
   - use PDL
 
   - Structs: need to improve checking of valid field names in Perl
@@ -29,12 +25,11 @@ S-Lang to Perl
 Perl to S-Lang
 --------------
 
- - Since we know the available datatype names we could make
-   Integer_Type be a short form for DataType_Type->new("Integer_Type")
-   ?????
-
 General
 -------
+
+ - need some way to find out the sizes of the various data types
+   (particularly for when we add piddle support)
 
  - some code might be easier if we use dup() to copy the item
    on the S-Lang stack - so can still pop it off later
@@ -47,10 +42,6 @@ General
      hard
      going to clash with PDL
      going to clash with Perl 6
-
- - how do we support PDL? Should there be an option to convert
-   arrays using one of:
-     plain perl, return as a single 'string', as a piddle
 
  - improve documentation
 

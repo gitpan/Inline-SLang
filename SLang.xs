@@ -6,95 +6,13 @@
 #include "util.h"
 
 /*
- * a macro to convert the S-Lang stack to a perl one
- * - should have made it a function but since it messes
- *   around with perl stack commands (eg EXTEND()) I
- *   couldn't be bothered working out how to do that
+ * How are S-Lang arrays converted to Perl?
+ *  non-numeric types are as array references
+ *  numeric arrays are piddles [if PDL support is available]
  *
- * note the minor complication in that we have to reverse
- * the order of the stack when moving from S-Lang to perl
- *
- * The macro requires the following in the PREINIT: section
- *
- *   SV **slist = NULL;
- *   int i, sdepth;
- *
- * and calls the function 'SV * sl2pl()'
- *
- * unlike Inline::Python/Ruby I always check the context
+ * Cannot be static since used in util.c
  */
-
-#define CONVERT_SLANG2PERL_STACK \
-    sdepth = _SLstack_depth(); \
-    Printf( ("    *** stack depth = %d\n", sdepth) ); \
- \
-    Printf( ("  checking context:\n") ); \
-    Printf( ("    GIMME_V=%i\n", GIMME_V) ); \
-    Printf( ("    G_VOID=%i\n", G_VOID) ); \
-    Printf( ("    G_ARRAY=%i\n", G_ARRAY) ); \
-    Printf( ("    G_SCALAR=%i\n", G_SCALAR) ); \
- \
-    /* We can save a little time by checking our context */ \
-    switch( GIMME_V ) { \
-      case G_VOID: \
-        /* let's clear the S-Lang stack */ \
-        if ( sdepth ) { \
-          Printf( ("clearing the S-Lang stack (%d items) since run in void context\n", sdepth) ); \
-          if ( -1 == SLdo_pop_n( sdepth ) ) \
-            croak( "Error: unable to clear the S-Lang stack\n" ); \
-        } \
-        XSRETURN_EMPTY; \
-        break; \
- \
-      case G_SCALAR: \
-        if ( sdepth ) { \
-          /* dump everything but the 'first' item */ \
-          Printf( ("removing %d items from the stack since run in scalar context\n", \
-	    sdepth-1 ) ); \
-          if ( sdepth > 1 ) \
-            if ( -1 == SLdo_pop_n( sdepth-1 ) ) \
-              croak( "Error: unable to clear the S-Lang stack\n" ); \
- \
-          Printf( ("trying to set perl stack item 0\n" ) ); \
-          PUSHs( sv_2mortal( sl2pl() ) ); \
-        } /* if: sdepth */ \
-        break; \
- \
-      case G_ARRAY: \
-        /*  \
-         * convert the S-Lang objects on the S-Lang stack into perl objects on  \
-         * the perl stack \
-         * \
-         * note: the order of the S-Lang stack has to be reversed \
-         */ \
-        if ( sdepth ) { \
-          Newz( 0, slist, sdepth, SV * ); \
-          if ( slist == NULL ) \
-            croak("Error: unable to allocate memory\n" ); /* ott ? */ \
-          for ( i = sdepth-1; i >= 0; i-- ) { \
-            Printf( ("reading from S-Lang stack item #%d\n", i ) ); \
-            slist[i] = sl2pl(); \
-          } \
- \
-          /* now can stick the objects onto the perl stack */ \
-          EXTEND( SP, sdepth ); \
-          for ( i = 0; i < sdepth; i++ ) { \
-            Printf( ("trying to set perl stack #%d\n", i ) ); \
-            PUSHs( sv_2mortal( slist[i] ) ); \
-          } \
- \
-          Printf( ("freeing up stack-related memory\n") ); \
-          Safefree( slist ); \
-        } /* if: sdepth */ \
-        break; \
- \
-      default: \
-        /* shouldn't happen with perl <= 5.8.0 */ \
-        croak( "Internal error: GIMME_V is set to a value I don't understand\n" ); \
- \
-    } /* switch(GIMME_V) */
-
-static char *_slang_version = SLANG_VERSION_STRING; /* do we really need this ? */
+int _slang_array_format = I_SL_ARRAY2AREF | I_SL_ARRAY2PDL;
 
 /*
  * Error handler: we call croak on the supplied string
@@ -122,6 +40,44 @@ void _sl_error_handler( char *emsg ) {
   croak( "%s\n", emsg );
 }
 
+/*
+ * a simple random-number generator used to store "opaque" objects
+ * in the _inline namespace. Obtained from 
+ *   http://www.taygeta.com/random.html
+ * and removed the set/get seed parts
+ *
+ * Linear Congruential Method, the "minimal standard generator"
+ * Park & Miller, 1988, Comm of the ACM, 31(10), pp. 1192-1201
+ * static char rcsid[] = "@(#)randlcg.c	1.1 15:48:15 11/21/94   EFC";
+ */
+
+#include <math.h>
+#include <limits.h>
+
+static long int my_quotient  = LONG_MAX / 16807L;
+static long int my_remainder = LONG_MAX % 16807L;
+static long int my_seed_val  = 0; /* is set at BOOT time */
+
+/*
+ * returns a random number between 0 and nmax-1 inclusive
+ * - could it return the value of nmax?
+ */
+int quick_random( int *nmax ) {
+  double scale = (double) *nmax;
+  if ( my_seed_val <= my_quotient )
+    my_seed_val = (my_seed_val * 16807L) % LONG_MAX;
+  else {
+    long int high_part = my_seed_val / my_quotient;
+    long int low_part  = my_seed_val % my_quotient;
+    long int test = 16807L * low_part - my_remainder * high_part;
+    if ( test > 0 ) my_seed_val = test;
+    else            my_seed_val = test + LONG_MAX;
+  }
+  /* being cavalier about overflows and rounding here */
+  return (int) floor( my_seed_val * scale / LONG_MAX );
+}
+
+
 MODULE = Inline::SLang	PACKAGE = Inline::SLang
 
 # At boot time:
@@ -130,24 +86,68 @@ MODULE = Inline::SLang	PACKAGE = Inline::SLang
 #
 
 BOOT:
-  Printf( ( "In Perl's BOOT section\n" ) );
-  /* want to allow dynamic linking, hence _init_import() is required */
-  if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) )
-    croak("Internal error: unable to initialize the S-Lang library\n");
-  /* set up error hook */
-  SLang_Error_Hook = _sl_error_handler;
-  Printf( ( "  - initialized S-Lang and intrinsic functions\n" ) );
+  {
+    SLang_NameSpace_Type *ns;
+
+    Printf( ( "In Perl's BOOT section\n" ) );
+    /* want to allow dynamic linking, hence _init_import() is required */
+    if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) )
+      croak("Internal error: unable to initialize the S-Lang library\n");
+    /* set up error hook */
+    SLang_Error_Hook = _sl_error_handler;
+    Printf( ( "  - initialized S-Lang and intrinsic functions\n" ) );
+
+    /*
+     * now create the _inline namespace and add a simple random-number
+     * generator to it
+     */
+    ns = SLns_create_namespace( "_inline" );
+    if( ns == NULL )
+      croak( "Error: Unable to create S-Lang namespace (_inline) during initialization\n" );
+    if( -1 == SLns_add_intrinsic_function(
+                ns, "_qrandom",(FVOID_STAR) quick_random,
+                SLANG_INT_TYPE, 1, SLANG_INT_TYPE ) )
+      croak( "Error: Unable to create ran. num generator in _inline during initialization\n" );
+
+    my_seed_val = (long int) time(NULL);
+  }
 
 PROTOTYPES: DISABLE
 
 # return the S-Lang version as a string
 
 char *
-_sl_version( )
+sl_version( )
   CODE:
-    RETVAL = _slang_version;
+    RETVAL = SLANG_VERSION_STRING;
   OUTPUT:
     RETVAL
+
+int
+sl_have_pdl( )
+  CODE:
+    RETVAL = I_SL_HAVE_PDL;
+  OUTPUT:
+    RETVAL
+
+# how are S-Lang arrays converted to Perl?
+#
+int
+sl_array2perl( ... )
+  PREINIT:
+    int newtype;
+  CODE:
+    if ( items > 1 ) croak( "Usage: sl_array2perl( [$flag] )" );
+    if ( items == 1 ) {
+      newtype = (int) SvIV( ST(0) );
+      if ( newtype < 0 || newtype > 1+(I_SL_HAVE_PDL<<1) )
+        croak( "Error: sl_array2perl() can only be sent an integer between 0 and %d (inclusive)", 1+(I_SL_HAVE_PDL<<1) );
+      _slang_array_format = newtype;
+    }
+    RETVAL = _slang_array_format;
+  OUTPUT:
+    RETVAL
+
 
 # return, as an associative array reference, the 
 # names of defined types (key) and a 2-element
@@ -210,16 +210,17 @@ void
 _sl_isa_datatype( inname )
     char *inname
   PREINIT:
+    const char *slformat = "string(%s);typeof(%s)==DataType_Type;";
     char *outname;
     char *slbuffer;
     size_t blen;
     int flag;
 
   PPCODE:
-    blen = 34+2*strlen(inname);
+    /* not bothered anout 2 extra chars due to %s %s in format */
+    blen = strlen(slformat)+2*strlen(inname);
     Newz( "", slbuffer, blen, char );
-    snprintf( slbuffer, blen,
-              "string(%s);typeof(%s)==DataType_Type;", inname, inname );
+    snprintf( slbuffer, blen, slformat, inname, inname );
 
     Printf( ("Checking if %s is a valid DataType_Type name\n",inname) );
     Printf( ("S-Lang buffer= [%s]\n", slbuffer) );
@@ -242,48 +243,73 @@ _sl_isa_datatype( inname )
 
 # try and guess the datatype of a Perl variable to try and get
 # around Perl's permiscuous datatypes
-#
-# -- test for - in order
-#       float
-#       integer
-#       string
-#     or object
-#       Math::Compex
-#       s/thing derived from Inline::SLang::_Type
-#     or currently die
-#
-# see also util.c/pl2sl()
+# - would be nice if didn't need to treat things using a switch
+#   statement (since it's another bit of code that needs updating
+#   whenever the type code changes)
 #
 
 void
 _guess_sltype( item )
     SV * item
   PREINIT:
+    SLtype sltype;
+    int slflag;
     SV * out;
   PPCODE:
-    /* don't call return here since can;t be bothered to read about it */
-    if ( !SvOK(item) )      { out = newSVpv( "Null_Type", 0 ); }
-    else if ( SvIOK(item) ) { out = newSVpv( "Integer_Type", 0 ); }
-    else if ( SvNOK(item) ) { out = newSVpv( "Double_Type", 0 ); }
-    else if ( SvPOK(item) ) { out = newSVpv( "String_Type", 0 ); }
-    else if ( sv_isobject(item) ) {
-      if ( sv_derived_from( item, "Math::Complex" ) ) {
-        out = newSVpv( "Complex_Type", 0 );
-      } else if ( sv_derived_from( item, "Inline::SLang::_Type" ) ) {
-	SV *type;
-	/* prob leaks mem here */
-	fixme( "memleak?" );
-	CALL_METHOD_SCALAR_SV( item, "typeof", , type );
-        CALL_METHOD_SCALAR_SV( type, "stringify", , out );
-	SvREFCNT_dec( type );
-      } else {
-      croak( "Internal error: unable to understand Perl object" );
-      }
-    } else {
-      croak( "Internal error: unable to understand Perl datatype" );
+    sltype = pltype( item, &slflag );
+
+    switch( sltype ) {
+      case SLANG_NULL_TYPE:     out = newSVpv( "Null_Type", 0 ); break;
+      case SLANG_INT_TYPE:      out = newSVpv( "Integer_Type", 0 ); break;
+      case SLANG_DOUBLE_TYPE:   out = newSVpv( "Double_Type", 0 ); break;
+      case SLANG_STRING_TYPE:   out = newSVpv( "String_Type", 0 ); break;
+      case SLANG_COMPLEX_TYPE:  out = newSVpv( "Complex_Type", 0 ); break;
+      case SLANG_DATATYPE_TYPE: out = newSVpv( "DataType_Type", 0 ); break;
+      case SLANG_STRUCT_TYPE:   out = newSVpv( "Struct_Type", 0 ); break;
+      case SLANG_ASSOC_TYPE:    out = newSVpv( "Assoc_Type", 0 ); break;
+      case SLANG_ARRAY_TYPE:    out = newSVpv( "Array_Type", 0 ); break;
+      case SLANG_UNDEFINED_TYPE:
+        if ( slflag == 0 ) out = newSVpv( "Undefined_Type", 0 );
+        else {
+	  /* handle a type treated as an 'opaque' type */
+	  SV *type;
+	  /* prob leaks mem here */
+	  fixme( "memleak?" );
+	  CALL_METHOD_SCALAR_SV( item, "typeof", , type );
+          CALL_METHOD_SCALAR_SV( type, "stringify", , out );
+	  SvREFCNT_dec( type );
+       }
+       break;
+
+      default:
+        croak( "Internal error: unable to understand Perl datatype" );
     }
     PUSHs( sv_2mortal( out ) );
 
+# create an empty nD array
+# - function is defined in util.c
+# - note no error checking
+#
+void
+_create_empty_array( SV *in )
+  PREINIT:
+    int dims[SLARRAY_MAX_DIMS];
+    AV *aref;
+    SV * out;
+    int i, ndim;
+  PPCODE:
+    aref = (AV *) SvRV( in );
+    ndim = 1 + av_len(aref);
+    Printf( ("Creating an empty array (%d dim) with size ", ndim) );
+    for( i = 0; i < ndim; i++ ) {
+      int dsize = SvIV( *av_fetch( aref, i, 0 ) );
+      dims[i] = dsize;
+      Printf( ("%d ", dsize) );
+    }
+    Printf( ("\n") );
+    out = _create_empty_array( ndim, dims );
+    PUSHs( sv_2mortal( out ) );
+    
 # NOTE:
 #  the perl routine sl_eval, which calls this, ensures that the
 #  string ends in a ';'. you can call this routine directly for a minor

@@ -23,21 +23,28 @@ require Exporter;
 
 require Inline::denter;
 
-use vars qw(@ISA $VERSION @EXPORT_OK);
+use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS );
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 @ISA = qw(Inline DynaLoader Exporter);
 
 # since using Inline we can't use the standard way
 # of importing symbols, so we add an EXPORT config option
-# which we use to mimic the Exporter interface (well,
-# we actually get Exporter to do the work so mimic isn't
-# really the correct word...)
+# which we use to mimic the Exporter interface
+#
+# EXPORT_OK will be added to below once we know what S-Lang
+# types are defined. EXPORT_TAGS will be filled up at that
+# time too
 #
 @EXPORT_OK =
     qw(
-       sl_eval sl_typeof sl_array
+       sl_array sl_array2perl sl_eval sl_have_pdl sl_typeof sl_version
        );
+
+%EXPORT_TAGS =
+  (
+   'types' => [],
+   );
 
 # do I need this [left over from code taken from Inline::Ruby/Python
 # modules but not sure what it's really for and too lazy to read
@@ -183,6 +190,9 @@ sub build {
     # S-Lang intrinsic functions that are to be bound
     # (bind_slfuncs)
     #
+    # And because we explicitly EXCLUDE the _inline namespace
+    # from being bound (since that is for use by this module only)
+    #
     # First off we need to check for bind_ns eq "All" or "Global"
     my $bind_ns = $o->{ILSM}{bind_ns};
     my $bind_all_ns = 0;
@@ -201,6 +211,10 @@ sub build {
 	$bind_all_ns = 1;
       }			  
     }
+
+    # remove _inline if it exists
+    $bind_ns = [ grep { $_ ne "_inline" } @{$bind_ns} ];
+
     my %ns_map = map {
       my ( $slns, $plns ) = split(/=/,$_,2);
       $plns ||= $slns;
@@ -271,8 +285,8 @@ sub build {
 	push @bind, $fname unless exists $$orig{$fname};
       }
 
-      warn "No functions found in $ns namespace!"
-	if $#bind == -1;
+      # decided that the warning was annoying
+      ##warn "No functions found in $ns namespace!" if $#bind == -1;
       $namespaces{$ns} = \@bind;
     }
 
@@ -290,8 +304,9 @@ sub build {
       }
     }
 
-    # now find the defined data types
-    # and create the perl classes
+    # now find the defined data types, set up
+    # Inline::SLang::xxx functions that return these as DataType_Type
+    # objects, and create the necessary perl classes
     #
     # From slang v1.4.8, the S-Lang defined types that we
     # want to handle are:
@@ -301,7 +316,8 @@ sub build {
     #   File_Type
     #   Ref_Type
     #
-    # [would like to handle FD/File handles via PerlIO]
+    # [would like to handle FD/File handles via PerlIO but that
+    #  may be hard/impossible]
     #
     # The list below is the remaining types - ie those we plan
     # to handle separately - either by using native Perl
@@ -331,18 +347,27 @@ sub build {
        );
 
     my $dtypes = Inline::SLang::_sl_defined_types();
-    my $classes = "";
+    my $pl_code = "";
     while ( my ( $dname, $dref ) = each %$dtypes ) {
+      # set up the function with a name equal to the data type
+      # - we will export this to the main package later on
+      #   if required (look for handling of the EXPORT option)
+      #
+      push @EXPORT_OK, $dname;
+      push @{ $EXPORT_TAGS{types} }, $dname;
+      $pl_code .= 
+	"sub Inline::SLang::$dname () { return DataType_Type->new('$dname'); }\n";
+
       next if exists $ignore{$dname};
 
       # create the Perl class code
       if ( $$dref[1] ) {
 	# a sub-class of Struct_Type
-	$classes .= qq{
+	$pl_code .= qq{
 package $dname;
-no strict;
-\@ISA = ( "Struct_Type" );
 use strict;
+use vars qw( \@ISA );
+\@ISA = ( "Struct_Type" );
 };
 
 	# find out the field names and create the 'constructor'
@@ -350,7 +375,7 @@ use strict;
 	     "get_struct_field_names(@" . $dname . ");"
 	);
 
-	$classes .=
+	$pl_code .=
 '
 use Carp;
 
@@ -384,11 +409,11 @@ sub TIEHASH {
 
       } else {
 	# a sub-class of Inline::SLang::_Type
-	$classes .= qq{
+	$pl_code .= qq{
 package $dname;
-no strict;
-\@ISA = ( "Inline::SLang::_Type" );
 use strict;
+use vars qw( \@ISA );
+\@ISA = ( "Inline::SLang::_Type" );
 sub new {
   my \$this  = shift;
   my \$class = ref(\$this) || \$this;
@@ -406,7 +431,10 @@ sub DESTROY {
 
     # build the horrible exporter hack
     #
-    # handle the EXPORT method
+    # handle the EXPORT method in a minimal way. We only
+    # support individual names and the !<key in export_tags>
+    # syntax
+    #
     # - this is a *horrible* way to do it; don't seem to be
     #   able to do it easily via
     #     Inline::SLang->export_to_level( 1|2, @{ $o->{ILSM}{EXPORT} } );
@@ -414,10 +442,27 @@ sub DESTROY {
     #
     my $export = "";
     if ( defined $o->{ILSM}{EXPORT} ) {
-      ## Inline::SLang->export_to_level( 2, @{ $o->{ILSM}{EXPORT} } );
+      my @funcs = @{ $o->{ILSM}{EXPORT} };
+
+      # expand out any !<key> entries
+      @funcs = map
+        {
+          my $name = $_;
+          # apparently can't use a return within this block!
+          if ( $name =~ /^!/ ) {
+            $name = substr($name,1);
+            die "Error: unknown tag '!$name' in EXPORT option\n"
+              unless exists $EXPORT_TAGS{$name};
+            ( @{ $EXPORT_TAGS{$name} } ); # insert all the vals
+          } else {
+            $name; # leave the value as is
+          }
+        } @funcs;
+
+      ## Inline::SLang->export_to_level( 2, @funcs);
 
       my %href = map { ($_,1); } @EXPORT_OK;
-      foreach my $func ( @{ $o->{ILSM}{EXPORT} } ) {
+      foreach my $func ( @funcs ) {
 	die "Error: EXPORT option sent an unknown symbol $func\n"
 	  unless exists $href{$func};
 	$export .= "*::$func = \\&$func;\n";
@@ -432,7 +477,7 @@ sub DESTROY {
     my $parse_info = Inline::denter->new->indent(
 	*namespaces => \%namespaces,
         *sl_types   => $dtypes,
-        *pl_classes => $classes,
+        *pl_code    => $pl_code,
         *ns_map     => \%ns_map,
 	*code       => $o->{ILSM}{code},
 	*export     => $export,
@@ -449,7 +494,7 @@ sub DESTROY {
     #
     $o->{ILSM}{namespaces} = \%namespaces;
     $o->{ILSM}{sl_types}   = $dtypes;
-    $o->{ILSM}{pl_classes} = $classes;
+    $o->{ILSM}{pl_code}    = $pl_code;
     $o->{ILSM}{ns_map}     = \%ns_map;
     $o->{ILSM}{EXPORT}     = $export;
     $o->{ILSM}{built}++;
@@ -500,7 +545,7 @@ sub load {
       my %sldat = Inline::denter->new->undent($sldat);
       $o->{ILSM}{namespaces} = $sldat{namespaces};
       $o->{ILSM}{sl_types}   = $sldat{sl_types};
-      $o->{ILSM}{pl_classes} = $sldat{pl_classes};
+      $o->{ILSM}{pl_code}    = $sldat{pl_code};
       $o->{ILSM}{ns_map}     = $sldat{ns_map};
       $o->{ILSM}{code}       = $sldat{code};
       $o->{ILSM}{EXPORT}     = $sldat{export};
@@ -539,25 +584,39 @@ sub load {
     }
 
     # Set up the Perl classes to handle the registered types
+    # and the functions that (can) make using DataType_Type
+    # variables easier
     #
-    eval $o->{ILSM}{pl_classes};
-    die "INTERNAL ERROR: Unable to create Perl classes for S-Lang types\n" .
+    eval $o->{ILSM}{pl_code};
+    die "INTERNAL ERROR: Unable to evaluate Perl code needed to bind the S-Lang types\n" .
       "$@\n" if $@;
       
     # bind the _inline namespace
     # v1.4.9 allows eval() to specify the namespace for the code
     # - do not use apostrohpes (') in the S-Lang comments!!!
+    # - have grabbed a random-number generator from the web to
+    #   try and have an okay scheme for generating keys; since
+    #   has to write a S-Lang intrinsic function to do this could
+    #   have chosen other ways to do this
+    #   [we just want something random-ish, nothing too complicated]
+    #
     sl_eval( 
 '
-implements("_inline");
+use_namespace("_inline");
 private variable _store = Assoc_Type [];
+
+private variable _id_str =
+  "abcdefghijklmnopqrstuvwxyz" +
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+  "0123456789 ~!@#$%^&*()_+|-=\[]{};:,<.>/?";
+private variable _id_len = strlen(_id_str);
+private define _get_letter() { return _id_str[[_qrandom(_id_len)]]; }
+
 static define _store_data( invar ) {
-  % need a unique key for _store: for now go with this
-  % simple, but slow algorithm
+  % need a unique key to store data in _store
   %
-  variable key = 0;
-  while ( assoc_key_exists(_store,string(key)) ) { key++; }
-  key = string(key);
+  variable key = _get_letter();
+  while ( assoc_key_exists(_store,key) ) { key += _get_letter(); }
   if ( assoc_key_exists(_store,key) ) {
     % want to use exit(), but that is not part of S-Lang; slsh provides it
     error( "Internal error: unable to find a unique key when storing data" );
@@ -645,38 +704,17 @@ sub sl_eval ($) {
 # If the variable is unrecognised then return undef
 # (if sent an undef then "Null_Type" is returned)
 #
-# Did have support for tied hash references but decided that the
-# user should never be using one of these directly - ie should
-# only ever see a Struct_Type/Assoc_Type object, in which case
-# we use the object typeof() method.
-#
-# Array references could be 'handled' - eg return Array_Type
-# but not implementing this at the moment [not convinced this is really
-# what we want]
+# we delegate all the work to _guess_sltype() which means we're
+# not as efficient as we could be (since opaque types will
+# have ->typeof->stringify called and then the output turned
+# back into a DataType_Type object) but I'm not too bothered about that
+# at the moment.
 #
 #==============================================================================
 sub sl_typeof ($) {
-  my $invar = shift || return DataType_Type->new("Null_Type");
-  my $ref   = ref($invar);
-
-  # no reference, then we have to work out whether string or number
-  # - which is a pain, so let the internals do it for us
-  #   UMMMM
-  if ( $ref eq "" ) { return sl_eval("typeof($invar);"); }
-
-  # Math::Complex -> Complex_Type
-  if ( UNIVERSAL::isa( $invar, "Math::Complex" ) ) {
-    return DataType->new("Complex_Type");
-  }
-
-  # defined from the base class?
-  if ( UNIVERSAL::isa( $invar, "Inline::SLang::_Type" ) ) {
-    return $invar->typeof();
-  }
-
-  # do not know what we've been sent so
-  return undef;
-} # sl_typeof
+  my $invar = shift || return Null_Type();
+  return DataType_Type->new( _guess_sltype($invar) );
+}
 
 #==============================================================================
 #
@@ -796,13 +834,19 @@ sub info {
     #
     my $ver = sl_eval("_slang_version_string");
     $info .= "Version of S-Lang:";
-    if ( _sl_version() eq $ver ) {
+    if ( sl_version() eq $ver ) {
       $info .= " $ver\n";
     } else {
-      $info .= " compiled with " . _sl_version();
+      $info .= " compiled with " . sl_version();
       $info .= " but using $ver\n";
     }
-    $info .= "Perl module version is $VERSION\n\n";
+    $info .= "Perl module version is $VERSION";
+    if ( sl_have_pdl() ) {
+      $info .= " and supports PDL" 
+    } else {
+      $info .= " with no support for PDL" 
+    }
+    $info .= "\n\n";
 
     $info .= "The following S-Lang types are recognised:\n";
     my $str = "";
@@ -914,16 +958,12 @@ sub is_struct_type { 0; }
 #    S-Lang: foo = Assoc_Type [String_Type];
 #    Perl:   $o1 = Assoc_Type->new( "String_Type" );
 #            $o1 = Assoc_Type->new( DataType_Type->new("String_Type") );
-#            $o2 = tie %foo, Assoc_Type, "String_Type";
-#            $o2 = tie %foo, Assoc_Type, DataType_Type->new("String_Type");
-#            ['$o2 =' is optional]
-#
-#    The use of tie is - currently - frowned upon. Let's see how the
-#    whole experiment pans out before making any stronger statements
+#            $o1 = Assoc_Type->new( String_Type() );
+#      the last option assumes you have asked Inline::SLang to export !types
 #
 #  Note that Assoc_Type is a subclass of Inline::SLang::_Type, so
-#  $o1 [1st Perl example] and $o2 [3rd example] have a number of
-#  methods (typeof, is_struct_type [returns 0], and an over-loaded stringify)
+#  $o1 has a number of methods (typeof, is_struct_type [returns 0],
+#  and an over-loaded stringify)
 #
 # Although we do provide the S-Lang struct mutators as object methods
 # I strongly suggest using the native hash interface instead since this
@@ -958,9 +998,9 @@ package Assoc_Type;
 
 require Tie::Hash;
 
-no strict; # stupid way to get package-scoped global
-@ISA = qw( Tie::ExtraHash Inline::SLang::_Type );
 use strict;
+use vars qw( @ISA );
+@ISA = qw( Tie::ExtraHash Inline::SLang::_Type );
 
 use Carp;
 
@@ -1078,9 +1118,9 @@ sub TIEHASH {
 
 package Struct_Type;
 
-no strict; # stupid way to get package-scoped global
-@ISA = ( "Inline::SLang::_Type" );
 use strict;
+use vars qw( @ISA );
+@ISA = ( "Inline::SLang::_Type" );
 
 use Carp;
 
@@ -1143,14 +1183,14 @@ sub TIEHASH {
 
 sub FETCH {
   my ( $impl, $key ) = @_;
-  die "Error: field '$key' does not exit in this " . ref($impl) . " structure\n"
+  croak "Error: field '$key' does not exist in this " . ref($impl) . " structure\n"
     unless exists $$impl[0]{$key};
   return $$impl[0]{$key};
 }
 
 sub STORE {
   my ( $impl, $key, $newval ) = @_;
-  die "Error: field '$key' does not exit in this " . ref($impl) . " structure\n"
+  croak "Error: field '$key' does not exist in this " . ref($impl) . " structure\n"
     unless exists $$impl[0]{$key};
   $$impl[0]{$key} = $newval;
 }
@@ -1231,6 +1271,7 @@ sub _define_struct {
 # Usage:
 #   $a = Assoc_Type->new( "Int_Type", [1,3,2] [, $aref ] );
 #   $a = Assoc_Type->new( DataType_Type->new("Int_Type"), [1,3,2], [$aref] );
+#   $a = Assoc_Type->new( Integer_Type(), [1,3,2], [$aref] );
 # 
 # $aref is an array reference of the data being sent in which we
 # assume matches the supplied datatype and size -- it's the user's
@@ -1255,16 +1296,14 @@ sub _define_struct {
 
 package Array_Type;
 
-no strict; # stupid way to get package-scoped global
-@ISA = ( "Inline::SLang::_Type" );
 use strict;
+use vars qw( @ISA );
+@ISA = ( "Inline::SLang::_Type" );
 
 use Carp;
 
 # first the over-ridden methods from Inline::SLang::_Type
 #
-
-sub _fill_in_blank_array ($);
 
 sub new {
   my $this   = shift;
@@ -1302,7 +1341,7 @@ sub new {
   if ( $narg == 3 ) {
     return bless [ $aref, $type, [@$dims] ], $class;
   } else {
-    return bless [ _fill_in_blank_array( [@$dims] ), $type, [@$dims] ], $class;
+    return bless [ Inline::SLang::_create_empty_array( $dims ), $type, [@$dims] ], $class;
   }
 }
 
@@ -1376,40 +1415,6 @@ sub reshape  { die "ERROR: reshape method not yet available\n"; }
 sub _reshape { die "ERROR: _reshape method not yet available\n"; }
 sub index    { die "ERROR: index method not yet available\n"; }
 
-# this is a private method: user code should *NOT* use this, or even
-# assume it's going to exist in future versions of the module
-# [we have a C version of this algorithm]
-#
-# NOT efficient
-# and may want to set the default value following S-Lang, e.g.:
-#   number -> 0
-#   cplx number -> 0+0i
-#   datatype -> Undefined_Type
-#   struct, string, ... -> NULL
-#
-sub _fill_in_blank_array ($) {
-  my $dims = shift;
-  my $dim  = (shift @$dims) - 1;
-
-  # create the array
-  my @array;
-  $#array = $dim;
-
-  # do we need to fill the array in?
-  if ( $#$dims > -1 ) {
-      foreach my $i ( 0 .. $dim ) {
-          # ensure we send in a copy, hence [@..]
-	  $array[$i] = _fill_in_blank_array( [ @$dims ] );
-      }
-  } else {
-      foreach my $i ( 0 .. $dim ) {
-          # could set to default value for the type
-	  $array[$i] = undef;
-      }
-  }
-  return \@array;
-} # sub: _fill_in_blank_array
-
 # these are private methods: user code should *NOT* use thes, or even
 # assume they're going to exist in future versions of the module
 #
@@ -1456,17 +1461,42 @@ sub _private_define_array {
 # - we use S-Lang to create a DataType_Type variable so that we can
 #     a) check we have a datatype
 #     b) handle type synonyms correctly
+# - we allow two datatypes to be checked for equality. Unfortunately
+#   since we don't have access to all the synonyms for a type it's not
+#   quite as useful as in S-Lang
 #
-# - if given an incorrect type name you WILL get ugly error messages printed
-#   to STDERR from S-Lang
+# As of 0.11 have added routines to Inline::SLang (can be exported into
+# main) which have the name of the type and are just wrappers around
+# DataType_Type->new("type name"). So you can say
+#   Integer_Type()
+# to return an Integer_Type object. Since we do not know what the synonyms
+# for the types we can not do this for things like Int_Type (or even
+# Long_Type if has the same size as Integer_Type say)
 #
 #==============================================================================
 
 package DataType_Type;
 
-no strict; # stupid way to get package-scoped global
-@ISA = ( "Inline::SLang::_Type" );
 use strict;
+use vars qw( @ISA );
+@ISA = ( "Inline::SLang::_Type" );
+
+# only equality/inequality and stringification
+#
+# over-ride the base 'stringify' method
+# since we actually want to print out the actual datatype,
+# and not that this is a DataType_Type object
+#
+use overload
+  (
+   "==" => sub { ${$_[0]} eq ${$_[1]}; },
+   "eq" => sub { ${$_[0]} eq ${$_[1]}; },
+   "!=" => sub { ${$_[0]} ne ${$_[1]}; },
+   "ne" => sub { ${$_[0]} ne ${$_[1]}; },
+   "\"\"" => \&DataType_Type::stringify
+   );
+
+sub stringify { return ${$_[0]}; }
 
 # delegate all the checking to S-Lang itself, so that
 # we can handle class synonyms
@@ -1503,13 +1533,6 @@ sub new {
 
     return bless \$val, $class;
 } # sub: new()
-
-# over-ride the base 'stringify' method
-# since we actually want to print out the actual datatype,
-# and not that this is a DataType_Type object
-#
-use overload ( "\"\"" => \&DataType_Type::stringify );
-sub stringify { return ${$_[0]}; }
 
 #==============================================================================
 

@@ -24,9 +24,30 @@
 
 /* functions that are visible outside of util.c */
 void pl2sl( SV *item );
+SLtype pltype( SV *plval, int *flag );
+
 SV * sl2pl( void );
 
 char *_get_object_type( SV *item );
+SV * _create_empty_array( int ndim, int dims[] );
+
+/*
+ * we can convert a S-Lang array into
+ *
+ * numeric types:
+ *   perl array reference
+ *   Array_Type object
+ *   piddle
+ *
+ * non-numeric types:
+ *   perl array reference
+ *   Array_Type object
+ */
+#define I_SL_ARRAY2AREF  0
+#define I_SL_ARRAY2ATYPE 1 
+#define I_SL_ARRAY2PDL   (I_SL_HAVE_PDL<<1)
+
+extern int _slang_array_format; /* declaration in SLang.xs */
 
 /* macro definitions intended for util.h only but placed here for convenience */
 
@@ -294,6 +315,97 @@ char *_get_object_type( SV *item );
     "$2=struct {value};set_struct_field($2,\"value\",$1);__push_args($2);" \
   ); \
   _clean_slang_vars(nelem);
+
+/* macros only used in SLang.xs but placed here for convenience */
+
+/*
+ * a macro to convert the S-Lang stack to a perl one
+ * - should have made it a function but since it messes
+ *   around with perl stack commands (eg EXTEND()) I
+ *   couldn't be bothered working out how to do that
+ *
+ * note the minor complication in that we have to reverse
+ * the order of the stack when moving from S-Lang to perl
+ *
+ * The macro requires the following in the PREINIT: section
+ *
+ *   SV **slist = NULL;
+ *   int i, sdepth;
+ *
+ * and calls the function 'SV * sl2pl()'
+ *
+ * unlike Inline::Python/Ruby I always check the context
+ */
+
+#define CONVERT_SLANG2PERL_STACK \
+    sdepth = _SLstack_depth(); \
+    Printf( ("    *** stack depth = %d\n", sdepth) ); \
+ \
+    Printf( ("  checking context:\n") ); \
+    Printf( ("    GIMME_V=%i\n", GIMME_V) ); \
+    Printf( ("    G_VOID=%i\n", G_VOID) ); \
+    Printf( ("    G_ARRAY=%i\n", G_ARRAY) ); \
+    Printf( ("    G_SCALAR=%i\n", G_SCALAR) ); \
+ \
+    /* We can save a little time by checking our context */ \
+    switch( GIMME_V ) { \
+      case G_VOID: \
+        /* let's clear the S-Lang stack */ \
+        if ( sdepth ) { \
+          Printf( ("clearing the S-Lang stack (%d items) since run in void context\n", sdepth) ); \
+          if ( -1 == SLdo_pop_n( sdepth ) ) \
+            croak( "Error: unable to clear the S-Lang stack\n" ); \
+        } \
+        XSRETURN_EMPTY; \
+        break; \
+ \
+      case G_SCALAR: \
+        if ( sdepth ) { \
+          /* dump everything but the 'first' item */ \
+          Printf( ("removing %d items from the stack since run in scalar context\n", \
+	    sdepth-1 ) ); \
+          if ( sdepth > 1 ) \
+            if ( -1 == SLdo_pop_n( sdepth-1 ) ) \
+              croak( "Error: unable to clear the S-Lang stack\n" ); \
+ \
+          Printf( ("trying to set perl stack item 0\n" ) ); \
+          PUSHs( sv_2mortal( sl2pl() ) ); \
+        } /* if: sdepth */ \
+        break; \
+ \
+      case G_ARRAY: \
+        /*  \
+         * convert the S-Lang objects on the S-Lang stack into perl objects on  \
+         * the perl stack \
+         * \
+         * note: the order of the S-Lang stack has to be reversed \
+         */ \
+        if ( sdepth ) { \
+          Newz( 0, slist, sdepth, SV * ); \
+          if ( slist == NULL ) \
+            croak("Error: unable to allocate memory\n" ); /* ott ? */ \
+          for ( i = sdepth-1; i >= 0; i-- ) { \
+            Printf( ("reading from S-Lang stack item #%d\n", i ) ); \
+            slist[i] = sl2pl(); \
+          } \
+ \
+          /* now can stick the objects onto the perl stack */ \
+          EXTEND( SP, sdepth ); \
+          for ( i = 0; i < sdepth; i++ ) { \
+            Printf( ("trying to set perl stack #%d\n", i ) ); \
+            PUSHs( sv_2mortal( slist[i] ) ); \
+          } \
+ \
+          Printf( ("freeing up stack-related memory\n") ); \
+          Safefree( slist ); \
+        } /* if: sdepth */ \
+        break; \
+ \
+      default: \
+        /* shouldn't happen with perl <= 5.8.0 */ \
+        croak( "Internal error: GIMME_V is set to a value I don't understand\n" ); \
+ \
+    } /* switch(GIMME_V) */
 
 
 #endif /* SL2PL_UTIL_H */

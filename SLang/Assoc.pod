@@ -75,7 +75,7 @@ variables can be a bit of a pain to work with
 in S-Lang).
 
 Or we could assume a default type of C<Int_Type>,
-which would match the S-Lang language.
+which would match S-Lang's approach.
 
 =item *
 
@@ -86,7 +86,7 @@ are guaranteed that the datatype is correct.
 
 =back
 
-=head2 The Assoc_Type Class
+=head1 THE ASSOC_TYPE CLASS
 
 The Perl C<Assoc_Type> class stores the datatype
 of the array along with the data. Once you have created
@@ -140,7 +140,7 @@ The return value can be treated as a hash reference,
 or you can use some of the other methods described
 below to manipulate the contents of the array.
 
-  my $assoc = Array_Type->new( "String_Type" );
+  my $assoc = Assoc_Type->new( "String_Type" );
   $$assoc{foo} = "hello";
   $$assoc{baz} = "hi there";
   while ( my ($k,$v) = each %$assoc ) {
@@ -159,14 +159,14 @@ of the data stored in the array. This is unlike
 the S-Lang C<_typeof> command which just
 returns C<Assoc_Type>.
 
-  my $assoc = Array_Type->new( "Complex_Type" );
+  my $assoc = Assoc_Type->new( "Complex_Type" );
   my $type  = $assoc->_typeof();
 
 =item * C<length()>
 
 Returns the number of keys in the associative array.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   print "Number of keys = ", $assoc->length, "\n";
 
@@ -179,14 +179,14 @@ using Perl's C<keys> routine. This means that the
 order of the returned keys is B<not> guaranteed
 to match that of S-Lang's C<assoc_get_keys()>.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   foreach my $k ( $assoc->get_keys ) {
     print "  key $k has value $$assoc{$k}\n";
   }
 
 There is no advantage to using this method
-rather than Perl's C<keys %$assoc>.
+over Perl's C<keys %$assoc>.
 
 =item * C<get_values()>
 
@@ -197,14 +197,14 @@ using Perl's C<values> routine. This means that the
 order of the returned keys is B<not> guaranteed
 to match that of S-Lang's C<assoc_get_values()>.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   foreach my $v ( $assoc->get_values ) {
     print "  array contains $v\n";
   }
 
 There is no advantage to using this method
-rather than Perl's C<values %$assoc>.
+over Perl's C<values %$assoc>.
 
 =item * C<key_exists( $key )>
 
@@ -213,12 +213,12 @@ and 0 otherwise.
 It is essentially S-Lang's
 C<assoc_key_exists()> routine.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   print "foo exists\n" if $assoc->key_exists("foo");
 
 There is no advantage to using this method
-rather than Perl's C<exists $$assoc{$key}>.
+over Perl's C<exists $$assoc{$key}>.
 
 =item * C<delete_key( $key )>
 
@@ -226,18 +226,18 @@ Removes the key from the associative array.
 It is essentially S-Lang's
 C<delete_key()> routine.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   print "foo exists\n" if $assoc->key_exists("foo");
 
 There is no advantage to using this method
-rather than Perl's C<delete $$assoc{$key}>.
+over Perl's C<delete $$assoc{$key}>.
 
 =item * C<get_value( $key )>
 
 Returns the value for the given key.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   my $val = $assoc->get_value( "foo" );
 
@@ -248,12 +248,12 @@ rather than Perl's C<$$assoc{$key}>.
 
 Sets the given key to the supplied value.
 
-  my $assoc = Array_Type->new( "Double_Type" );
+  my $assoc = Assoc_Type->new( "Double_Type" );
   $$assoc{"foo"} = 1.0; $$assoc{"bar"} = 3.0e6;
   $assoc->set_value( "foo", 44.1 );
 
 There is no advantage to using this method
-rather than Perl's C<$$assoc{$key}>.
+over Perl's C<$$assoc{$key}>.
 
 =back
 

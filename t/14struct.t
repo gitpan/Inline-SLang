@@ -8,8 +8,9 @@
 
 use strict;
 
-use Test::More tests => 64;
+use Test::More tests => 71;
 
+use Inline 'SLang' => Config => EXPORT => [ '!types' ];
 use Inline 'SLang';
 
 use Data::Dumper;
@@ -27,6 +28,9 @@ sub approx ($$$) {
 }
 
 ## Tests
+
+# for most of the tests we want arrays converted as array references
+Inline::SLang::sl_array2perl(0);
 
 my ( $ret1, $ret2, $ret3, @ret );
 
@@ -57,9 +61,10 @@ is( $$ret1{f1}, 2, "changed f1 to 2" );
 ok( eq_array( [@$ret1{qw(f2 f3)}], [-1,-2.1] ),
     "changed f2 to -1 & f3 to -2.1" );
 
-# test stringification on an easy structure
+# stringification is now an easy test
 $ret1 = struct2();
 is( "$ret1", "Struct_Type", "The stringification works" );
+is( $ret1->typeof, Struct_Type(),   "as does the type checking" );
 
 # check we play nicely with the stack
 ( $ret1, $ret2, $ret3 ) = ret_multi();
@@ -74,6 +79,7 @@ $ret1 = retbar();
 isa_ok( $ret1, "Inline::SLang::_Type" );
 isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Bar_Type" );
+is( $ret1->typeof, Bar_Type(), "checking type matches" );
 is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
 
 ok( eq_array( [keys %$ret1], [ "foo", "bar" ] ),
@@ -84,51 +90,23 @@ is( "$ret1", "Bar_Type", "  and the stringification works" );
 
 ## Perl objects
 
-# first test the tie interface
-# - in general you should *NOT* be doing this; use
-#   the object constructor instead
+# have removed tests of the tie intreface since the user should
+# never see this and it is implicitly tested by everything else here
 #
-# [we've implicitly tested all this earlier, so I expect
-#  that these tests aren't actually helping us]
-#
-my %ret;
-eval {
-  tie %ret, 'Struct_Type', ['x', 'a', 'a_space'];
-};
-is( $@, "", "Can tie a \% array to Struct_Type" );
-ok( eq_array( [keys %ret], ["x","a","a_space"] ),
-	"  and fields in correct order" );
-my $label = "  able to set fields in hash array";
-@ret{qw( x a )} = ( 'a string', [1,2,4] );
-is( $ret{x}, "a string", $label );
-is( $ret{a_space}, undef, $label );
-ok( eq_array( $ret{a}, [1,2,4] ), $label );
-
-# if we try and set a field that doesn't exist we shold fail
-eval {
-  $ret{does_not_exist} = 23;
-};
-like( $@,
-      qr/^Error: field 'does_not_exist' does not exit in this Struct_Type structure/,
-      "Unable to create a field that does not exist" );
-
-# can we clear the array?
-%ret = ();
-ok( eq_array( [keys %ret], ["x","a","a_space"] ),
-	"Fields still exist after clearing struct" );
-ok( !defined $ret{a}, "  and have been set to undef" );
-
-# now test the object constructor
+# the object constructor
 #
 $ret1 = Struct_Type->new( ['a','x','a_space'] );
 ##print Dumper( $ret1 ), "\n";
 isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Inline::SLang::_Type" );
+is( $ret1->typeof, Struct_Type(), "and type is okay" );
 ok( $ret1->is_struct_type, "and we are a structure" );
 
-# have tested setting the fields above, but repeat
+ok( eq_array( [keys %$ret1], [ "a", "x", "a_space" ] ),
+    "  and contains the correct fields (in the right order)" );
+
 # - note leave 'a_space' as undef
-$label = "  able to set fields in created structure";
+my $label = "  able to set fields in created structure";
 @$ret1{qw( x a )} = ( 'a string', [1,2,4] );
 is( $$ret1{x}, "a string", $label );
 is( $$ret1{a_space}, undef, $label );
@@ -143,26 +121,35 @@ is( check_struct_valuesa($ret1), 1,
 	"  and the field values are okay" );
 
 # check we don't mess up the stack
-ok( send3a("a string",$ret1,DataType_Type->new("Float_Type")),
+ok( send3a("a string",$ret1,Float_Type()),
    "Inline::SLang::Struct_Type 2 S-Lang plays okay w/ stack" );
+
+# how about some illegal operations
+#
+# looks like delete doesn't even want to work on this object anyway
+
+eval { delete $$ret1{'x'}; };
+like( $@, qr/^Error: unable to delete a field from a Struct_Type structure/,
+	"can not delete the 'x' field [get an error]" );
+ok( eq_array( [keys %$ret1], [ "a", "x", "a_space" ] ),
+    "can not delete the 'x' field [it still exists]" );
+
+eval { $$ret1{'foobar'}; };
+like( $@, qr/^Error: field 'foobar' does not exist in this Struct_Type structure/, 
+	"can not add a field [get an error]" );
+eval { $$ret1{'foobar'} = 23; };
+like( $@, qr/^Error: field 'foobar' does not exist in this Struct_Type structure/, 
+	"can not add a field [get an error]" );
+ok( eq_array( [keys %$ret1], [ "a", "x", "a_space" ] ),
+    "  and it hasn't been added to the hash keys" );
 
 # test type-deffed structures
 
-# again, you shouldn't be doing this, but using Bar_Type->new()
-#
-eval { tie %ret, 'Bar_Type'; };
-is( $@, "", "Can tie a \% array to a named struct" );
-ok( eq_array( [keys %ret], [ "foo", "bar" ] ),
-    "  and contains the correct fields (in the right order)" );
-$ret{bar} = "far";
-is( $ret{bar}, "far", "  and can set one" );
-
-# now to how they will normally be used
 $ret1 = Bar_Type->new();
-##{ print "bar_type =\n", Dumper(tied(%$ret1)), "\n"; }
 isa_ok( $ret1, "Inline::SLang::_Type" );
 isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Bar_Type" );
+is( $ret1->typeof, Bar_Type(), "  type agrees" );
 is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
 
 $label = "  able to set fields in type-deffed structure";
@@ -170,14 +157,13 @@ $label = "  able to set fields in type-deffed structure";
 is( $$ret1{foo}, "bar", $label );
 is( $$ret1{bar}, 3, $label );
 
-##{ print "bar_type =\n", Dumper(tied(%$ret1)), "\n"; }
 ok( check_bar($ret1), "  and can convert to S-Lang" );
 
 is( check_struct_valuesb($ret1), 1,
 	"  and the field values are okay" );
 
 # check we don't mess up the stack
-ok( send3b("a string",$ret1,DataType_Type->new("Float_Type")),
+ok( send3b("a string",$ret1,Float_Type()),
    "Bar_Type 2 S-Lang plays okay w/ stack" );
 
 # test some more features of the tied hash interface:
@@ -210,7 +196,7 @@ $$ret1{goo}{q1} = "a q1";
 $$ret1{"x3"}->set_field( "foo", 23 );
 $$ret1{"x3"}{bar} = 47.3;
 $$ret1{"_bob"}{a1} = 0;
-$$ret1{"_bob"}{x1} = DataType_Type->new();
+$$ret1{"_bob"}{x1} = DataType_Type();
 $$ret1{"_bob"}{q1} = Math::Complex->make(-4,2);
 
 $ret2 = Bar_Type->new();
@@ -232,28 +218,71 @@ ok(
    UNIVERSAL::isa($b,"Struct_Type") &&
    UNIVERSAL::isa($c,"Bar_Type"),
    $label . "correct objs returned" );
-ok( $$ret2{foo} == 1 && $$ret2{bar} == 3, $label . "Bar_Type[2] contents okay" );
-ok( $$ret3{foo} eq "xfpp" && eq_array( $$ret3{bar}, [ [2], [4], [3] ] ),
+ok( $$a{foo} == 1 && $$a{bar} == 3, $label . "Bar_Type[2] contents okay" );
+ok( $$c{foo} eq "xfpp" && eq_array( $$c{bar}, [ [2], [4], [3] ] ),
 	$label . "Bar_Type[3] contents okay" );
-ok( eq_array( [keys %$ret1], ["goo","x3","_bob"] ),
+ok( eq_array( [keys %$b], ["goo","x3","_bob"] ),
     $label . "Struct_Type[1] has correct keys" );
 ok(
-   UNIVERSAL::isa($$ret1{goo}, "Struct_Type") &&
-   UNIVERSAL::isa($$ret1{x3},  "Bar_Type") &&
-   UNIVERSAL::isa($$ret1{_bob},"Struct_Type"),
+   UNIVERSAL::isa($$b{goo}, "Struct_Type") &&
+   UNIVERSAL::isa($$b{x3},  "Bar_Type") &&
+   UNIVERSAL::isa($$b{_bob},"Struct_Type"),
    $label . "Struct_Type[1] values are structs" );
-ok( eq_array( [@{ $$ret1{goo} }{qw(a1 x1 q1)}], ["a a1","a x1","a q1"] ),
+ok( eq_array( [@{ $$b{goo} }{qw(a1 x1 q1)}], ["a a1","a x1","a q1"] ),
     $label . "Struct_Type[1] field=goo values okay" );
-ok( eq_array( [@{ $$ret1{x3} }{qw(foo bar)}], [23,47.3] ),
+ok( eq_array( [@{ $$b{x3} }{qw(foo bar)}], [23,47.3] ),
     $label . "Struct_Type[1] field=x3 values okay" );
 ok(
-   $$ret1{_bob}{a1} == 0 &&
-   UNIVERSAL::isa($$ret1{_bob}{x1},"DataType_Type") &&
-   $$ret1{_bob}{x1}->stringify eq "DataType_Type" &&
-   UNIVERSAL::isa($$ret1{_bob}{q1},"Math::Complex") &&
-   $$ret1{_bob}{q1}->Re == -4 &&
-   $$ret1{_bob}{q1}->Im == 2,
+   $$b{_bob}{a1} == 0 &&
+   UNIVERSAL::isa($$b{_bob}{x1},"DataType_Type") &&
+   $$b{_bob}{x1} eq DataType_Type() &&
+   UNIVERSAL::isa($$b{_bob}{q1},"Math::Complex") &&
+   $$b{_bob}{q1}->Re == -4 &&
+   $$b{_bob}{q1}->Im == 2,
    $label . "Struct_Type[1] field=_bob values okay" );
+
+# test the silly object above with a different array mapping
+#
+# note there's only 1 array in it but we check everything
+# (to ensure there's no hidden surprises in the conversion
+#  code)
+#
+Inline::SLang::sl_array2perl(1);
+
+$a = $b = $c = undef;
+( $a, $b, $c ) = ret_silly_obj( $ret2, $ret1, $ret3 );
+
+$label = "Checking Perl>S-Lang>Perl [arrays -> Array_Type]: ";
+ok(
+   UNIVERSAL::isa($a,"Bar_Type") &&
+   UNIVERSAL::isa($b,"Struct_Type") &&
+   UNIVERSAL::isa($c,"Bar_Type"),
+   $label . "correct objs returned" );
+ok( $$a{foo} == 1 && $$a{bar} == 3, $label . "Bar_Type[2] contents okay" );
+ok( $$c{foo} eq "xfpp" &&
+    UNIVERSAL::isa( $$c{bar}, "Array_Type" ) &&
+    eq_array( $$c{bar}->toPerl, [ [2], [4], [3] ] ),
+	$label . "Bar_Type[3] contents okay" );
+ok( eq_array( [keys %$b], ["goo","x3","_bob"] ),
+    $label . "Struct_Type[1] has correct keys" );
+ok(
+   UNIVERSAL::isa($$b{goo}, "Struct_Type") &&
+   UNIVERSAL::isa($$b{x3},  "Bar_Type") &&
+   UNIVERSAL::isa($$b{_bob},"Struct_Type"),
+   $label . "Struct_Type[1] values are structs" );
+ok( eq_array( [@{ $$b{goo} }{qw(a1 x1 q1)}], ["a a1","a x1","a q1"] ),
+    $label . "Struct_Type[1] field=goo values okay" );
+ok( eq_array( [@{ $$b{x3} }{qw(foo bar)}], [23,47.3] ),
+    $label . "Struct_Type[1] field=x3 values okay" );
+ok(
+   $$b{_bob}{a1} == 0 &&
+   UNIVERSAL::isa($$b{_bob}{x1},"DataType_Type") &&
+   $$b{_bob}{x1} eq DataType_Type() &&
+   UNIVERSAL::isa($$b{_bob}{q1},"Math::Complex") &&
+   $$b{_bob}{q1}->Re == -4 &&
+   $$b{_bob}{q1}->Im == 2,
+   $label . "Struct_Type[1] field=_bob values okay" );
+
 
 __END__
 __SLang__

@@ -4,10 +4,6 @@
 #   (Neil Watkiss), although all errors should be assumed to
 #   be mine and not Neil's
 #
-# The module is named SLang rather than S-Lang since
-# the hyphen confuses ExtUtils. The L remains capitalised
-# to point out it's S-Lang and not 'slang'.
-#
 
 eval { require 5.6.0 } or die <<EOD;
 ############
@@ -37,6 +33,8 @@ my $help  = 0;
 my $slangdir = "";
 my $slanglib = "";
 my $slanginc = "";
+my $pdl = 1;
+$pdl = 0; # hack for 0.11 since we don't yet support PDL
 
 ## Search path for the S-Lang library
 
@@ -71,10 +69,11 @@ if ( defined $ENV{"ASCDS_INSTALL"} ) {
 GetOptions(
 	   'gdb:s' => \$gdb,
 	   'debug' => \$debug,
-	   'help' => \$help,
+	   'help!' => \$help,
 	   'slangdir:s' => \$slangdir,
 	   'slanglib:s' => \$slanglib,
 	   'slanginc:s' => \$slanginc,
+	   'pdl!' => \$pdl,
 	   ) or usage();
 
 usage() if $help;
@@ -169,11 +168,31 @@ my $incpath = "-I$slanginc";
 my $libpath = "-L$slanglib -lslang";
 
 #============================================================================
+# PDL support
+#============================================================================
+
+# HACK for 0.11
+if ( $pdl ) { print "\nNOTE: 0.11 does not support the --pdl option. Turning off\n\n"; $pdl = 0; }
+
+if ( $pdl ) {
+  # should I try and enforce a version of PDL?
+  eval { use PDL; };
+
+  # since --pdl is on by default I only make it a warning when
+  # it cannot be found
+  #
+  if ( $@ ) {
+    print "\nWARNING: PDL support has been disabled as not found on system\n\n";
+    $pdl = 0;
+  }
+}
+
+#============================================================================
 # Finalize, and write the makefile
 #============================================================================
 
-my $defs = "";
-$defs .= "-DI_SL_DEBUG" if $debug;
+my $defs = "-DI_SL_HAVE_PDL=$pdl";
+$defs .= " -DI_SL_DEBUG" if $debug;
 
 WriteMakefile(
     $defs ? (DEFINE => $defs) : (),
@@ -214,10 +233,14 @@ Options:
 
    otherwise the following directories are searched:
 $paths
+  PDL support:
+    --pdl     Turn on support for PDL, if present (default)
+    --nopdl   Turn off support for PDL
+
   debugging:
     --gdb     Turn on compiler's debugging flag (use my guess).
     --gdb=x   Pass your own debugging flag, not mine.
-    --debug   Turn on diagnostic print statements (a lot of
+    --debug   Turn on diagnostic print statements (a *lot* of
               screen output)
 
 END

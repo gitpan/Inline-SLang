@@ -15,6 +15,7 @@ use Inline 'SLang';
 ### tell Inline::SLang that we want to convert S-Lang arrays
 ### into Perl array references
 ###
+Inline::SLang::sl_array2perl( 0 );
 
 use Data::Dumper;
 
@@ -212,8 +213,8 @@ is( $$ret1[0][0][0][0][0][0], -2.4,     "     and contents okay" );
 $ret1 = ret_foofoo(2);
 is( ref($ret1), "ARRAY", 'arrays of FooFoo_Struct as an array' );
 is( $#$ret1, 1, '  2 elem' );
-ok( $$ret1[0]->typeof->stringify &&
-    $$ret1[1]->typeof->stringify, "  both FooFoo_Struct's" );
+ok( $$ret1[0]->typeof eq Inline::SLang::FooFoo_Struct() &&
+    $$ret1[1]->typeof == Inline::SLang::FooFoo_Struct() , "  both FooFoo_Struct's" );
 ok( $$ret1[0]{foo1} == 0 && $$ret1[0]{foo2} == 0 &&
     $$ret1[1]{foo1} == 1 && $$ret1[1]{foo2} == 100,
     "  and values okay" );
