@@ -17,6 +17,87 @@ However, all bugs are my own creation.
 
 =head2 What happens when Perl starts?
 
+The S-Lang interpreter is initialized using the
+C<SLang_init_all()>, C<SLang_init_array_extra()>, and
+C<SLang_init_import()> routines. These are used to ensure
+that all the functions in the
+S-Lang Run-Time Library
+(L<http://www.s-lang.org/doc/html/slangfun.html>)
+are available.
+An error handler is set up (using the C<SLang_Error_Hook>
+variable in the C library) which restarts the S-Lang library,
+clears the S-Lang error variable, and then calls Perl's
+C<croak()> routine with the S-Lang error message. This
+allows users to trap S-Lang errors from Perl code using
+C<eval()>; for instance
+
+  # Evaluate a S-Lang statement which contains an error
+  #
+  eval { Inline::SLang::sl_eval( "variable = ;" ); };
+  print "The S-Lang error was:\n$@\n";
+
+will result in the following message printed to the screen:
+
+  The S-Lang error was:
+  S-Lang Error: Syntax Error: Expecting a variable name: found '=', line 1, file: ***string***
+
+The initialization of the S-Lang interpreter is
+done in the C<BOOT> section of F<Slang.xs>.
+
+Additional initializtion is performed if the C<SETUP> configuration
+option is set to C<slsh>, which is its default value. This
+step is performed by Perl just prior to loading the user-supplied
+S-Lang code (see the functions C<build()> and C<load()> in
+F<Slang.pm>).
+If the option is set, additional changes are made 
+so that the environment of the
+S-Lang interpreter matches that used by the C<slsh> interpreter from
+the S-Lang distribution.
+These changes are listed below and are currently "UNIX centric",
+although they should be made to work on all systems in the long run.
+Note that the S-Lang functions and variables created by C<slsh> -
+e.g. C<atexit()>, C<exit()>, and C<__argv> - are I<not> created
+by this code.
+
+=over 2
+
+=item 1
+
+The load path for the S-Lang library is set to the contents of
+the C<SLSH_PATH> environment variable. The path can be queried
+and changed using the C<get_slang_load_path()> and
+C<set_slang_load_path()> functions from the S-Lang Run-Time
+Library.
+
+=item 2
+
+The system configuration file (F<slsh.rc>) is evaluated. The 
+file is searched from the colon-separated directly list stored in
+(only the first value that is defined is used in the search):
+
+=over 2
+
+=item *
+
+The environment variable C<SLSH_CONF_DIR>.
+
+=item *
+
+The environment variable C<SLSH_LIB_DIR>.
+
+=item *
+
+The set of directories: C</usr/local/etc:/usr/local/slsh:/etc:/etc/slsh>.
+
+=back
+
+=item 3
+
+The user configuration file (F<.slshrc>) is evaluated if one exists
+in the directory given by the environment variable C<HOME>.
+
+=back
+
 If the Perl code has not been evaluated before - or if
 it has been changed since the previous run - the 
 L<Inline> code kicks in to evaluate the S-Lang code.
@@ -26,7 +107,7 @@ This involves:
 
 =item 1
 
-The S-Lang interpreter is started and queried to find
+The S-Lang interpreter is queried to find
 out all functions that are defined in the namespaces
 listed in the C<BIND_NS> configuration option. 
 The user-supplied

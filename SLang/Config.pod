@@ -174,6 +174,65 @@ The reason for giving C<" "> as the S-Lang code in the
 last example is to stop C<Inline> from complaining about being
 sent no code.
 
+=head3 SETUP - how to configure the S-Lang interpreter?
+
+The C<SETUP> option can be set to one of:
+
+=over 2
+
+=item "slsh"
+
+This is the I<default> value. When set, the S-Lang interpreter
+is set up in a similar manner to that of the C<slsh> interpreter
+from the S-Lang distribution (v1.4.9):
+
+=over 2
+
+=item *
+
+The interpreter's load path - i.e. the path that can be accessed
+using the C<get_slang_load_path()> and C<set_slang_load_path()>
+routines from the S-Lang Run-Time Library - is set to the
+contents of the environment variable C<SLSH_PATH>.
+
+=item *
+
+The system configuration file F<slsh.rc> is evaluated. This file is
+looked for in one of:
+
+=over 2
+
+=item a
+
+The C<SLSH_CONF_DIR> environment variable.
+
+=item b
+
+The C<SLSH_LIB_DIR> environment variable.
+
+=item c
+
+The directories: C</usr/local/etc:/usr/local/slsh:/etc:/etc/slsh>.
+
+=back
+
+=item *
+
+The user's configuration file F<.slshrc> is evaluated. This file
+is searched for in the directory given by the environment variable
+C<HOME>.
+
+=back
+
+=item "none"
+
+No additional set up is made to the interpreter.
+
+=back
+
+At present the code used to support the C<slsh> option will
+only work for UNIX-style file systems/set ups.
+
 =head3 EXPORT - how to export Perl functions from Inline::SLang
 
 The L<Inline::SLang module|Inline::SLang> contains
@@ -195,15 +254,40 @@ A wrapper around the constructor for the C<Array_Type> class.
 Useful if you want to ensure that a Perl array reference is
 converted to the correct array type and size in S-Lang.
 
+=item sl_array2perl()
+
+Used to read or write the flag that controls how S-Lang arrays
+are converted to Perl. See L<Inline::SLang::Array>.
+
 =item sl_eval()
 
 Call S-Lang's C<eval()> routine and, on exit, convert the
 stack to Perl.
 
+=item sl_have_pdl()
+
+Determine if the module was compiled with support for
+L<PDL|PDL::Intro>.
+
+=item sl_setup_as_slsh()
+
+Sets up the interpreter in a similar manner to that used
+by C<slsh>. This routine should be rarely needed.
+
+=item sl_setup_called()
+
+Returns the number of times the C<sl_setup_as_slsh()>
+routine has been called.
+
 =item sl_typeof()
 
 A wrapper around S-Lang's C<typeof()> routine. It is more
 efficient than using S-Lang's typeof routine.
+
+=item sl_version()
+
+Returns the version of the S-Lang library used to compile
+the module.
 
 =item C<< <datatype name>() >>
 
@@ -262,13 +346,13 @@ source code of the module):
   define bar(x) { foobar = x; }
   FOO
 
-The relevant part of the output (as of version 0.20) is:
+The relevant part of the output (as of version 0.30) is:
 
   Configuration details
   ---------------------
 
-  Version of S-Lang: 1.4.8
-  Perl module version is 0.20 with support for PDL
+  Version of S-Lang: 1.4.9
+  Perl module version is 0.30 and supports PDL
 
   The following S-Lang types are recognised:
    Int32_Type UInteger_Type _IntegerP_Type

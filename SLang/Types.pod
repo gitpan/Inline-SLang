@@ -61,11 +61,8 @@ been used, but then we would not be able to convert it
 back into a C<Complex_Type> variable in S-Lang (well, not
 without telling the computer this is what we wanted).
 
-Version 0.20 introduces support for the
-L<the Perl Data Language (ie PDL)|PDL::Intro>;
-unfortunately the code needs some issues thrashed
-about a bit - namely handling of > 1D piddles/arrays.
-It has been released to garner user comments.
+Version 0.20 of the module added support for the
+L<the Perl Data Language (ie PDL)|PDL::Intro>.
 
 =head2 Supported S-Lang Data Types
 
@@ -326,9 +323,6 @@ As a Perl array reference.
 =item 2
 
 As a piddle (if you are using the L<Perl Data Language|PDL::Intro>).
-
-As of version B<0.20> this support is definitely experimental;
-see L<Inline::SLang::Array> for more details.
 
 =item 3
 

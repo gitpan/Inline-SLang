@@ -2,18 +2,12 @@
 #
 # test conversion of S-Lang arrays to Perl using piddles
 #
-# try to keep this up-to-date with 12arrays2perl.t
-#
-# When get to > 1D arrays can see the difference between array indexing
-# for piddles and array references which will probably turn out to be
-# a bad idea for Inline::SLang
-#
 
 use strict;
 
 use Inline 'SLang';
 
-use constant NTESTS => 166;
+use constant NTESTS => 170;
 use Test::More tests => NTESTS;
 
 if ( Inline::SLang::sl_have_pdl() ) {
@@ -60,6 +54,17 @@ SKIP: {
     is( $ret1->type->symbol, "PDL_L", "  and Integer_Type converted to PDL_L" );
     is( $ret1->at(0), 3, "  and elem 0 contains 3" );
     is( $ret1->at(1), 5, "  and elem 1 contains 5" );
+
+    ## S-Lang 2 perl: 'indexed' arrays
+
+    $ret1 = array_index();
+    ok( all( $ret1 == long(4,12,10,18) ), 'check of indexed array 1D' );
+    $ret1 = array_index_x(0);
+    ok( all( $ret1 == long(2,4,6) ), 'check of indexed array x[0]' );
+    $ret1 = array_index_x(2);
+    ok( all( $ret1 == long(14,16,18) ), 'check of indexed array x[2]' );
+    $ret1 = array_index_y(1);
+    ok( all( $ret1 == long(4,10,16) ), 'check of indexed array y[1]' );
 
     ## S-Lang 2 perl: "uncommon" types
 
@@ -388,6 +393,14 @@ __SLang__
 % integers
 define arrayi2 () { return [2]; }
 define arrayi35 () { return [3,5]; }
+
+% check we can handle "indexed" arrays
+%
+private variable long_array1D = [1:9] * 2;
+private variable long_array2D = _reshape( long_array1D, [3,3] );
+define array_index ()    { return long_array1D[[1,5,4,8]]; }
+define array_index_x (x) { return long_array2D[x,*]; }
+define array_index_y (y) { return long_array2D[*,y]; }
 
 % force the data types into "uncommon" ones
 define array_ui () {

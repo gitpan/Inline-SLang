@@ -5,7 +5,7 @@
 use strict;
 
 my $loaded = 0;
-BEGIN { use Test::More tests => 4; }
+BEGIN { use Test::More tests => 5; }
 END   { fail( "Able to 'use Inline SLang'" ) unless $loaded; }
 
 ## Tests
@@ -31,6 +31,13 @@ like( $@, qr/^S-Lang Error: Syntax Error: Expecting a variable name: found '=', 
 # and check that the interpreter is still working
 is( JAxH("re-installed"), "Just Another re-installed Hacker\n",
 	"and the S-Lang interpreter has been re-started" );
+
+# Just check that the default SETUP option is 'slsh'.
+# Tests of the actual functionality of this option are in
+#  01setup1.t and 01setup2.t
+#
+my $counter = Inline::SLang::sl_setup_called();
+is ( $counter, 1, "The sl_setup_as_slsh() code has been called once." );
 
 __END__
 __SLang__

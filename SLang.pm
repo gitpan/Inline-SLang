@@ -1,4 +1,6 @@
-
+#
+# $Id: SLang.pm,v 1.51 2005/01/04 17:06:57 dburke Exp $
+#
 # Inline package for S-Lang (http://www.s-lang.org/)
 # - the name has been changed to Inline::SLang since hyphens
 #   seem to confuse ExtUtils
@@ -7,6 +9,30 @@
 # since I used these modules as a base rather than bother to
 # think about things. However, all errors are likely to be
 # mine
+#
+
+#
+# This software is Copyright (C) 2003, 2004, 2005 Smithsonian
+# Astrophysical Observatory. All rights are reserved.
+# 
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# 02111-1307 USA
+# 
+# Or, surf on over to
+# 
+#  http://www.fsf.org/copyleft/gpl.html
 #
 
 package Inline::SLang;
@@ -23,9 +49,9 @@ require Exporter;
 
 require Inline::denter;
 
-use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS );
+use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS);
 
-$VERSION = '0.30';
+$VERSION = '1.00';
 @ISA = qw(Inline DynaLoader Exporter);
 
 # since using Inline we can't use the standard way
@@ -38,7 +64,9 @@ $VERSION = '0.30';
 #
 @EXPORT_OK =
     qw(
-       sl_array sl_array2perl sl_eval sl_have_pdl sl_typeof sl_version
+       sl_array sl_array2perl sl_eval sl_have_pdl
+       sl_setup_as_slsh sl_setup_called
+       sl_typeof sl_version
        );
 
 %EXPORT_TAGS =
@@ -88,6 +116,10 @@ sub usage_config_export {
   "The Inline::SLang option 'EXPORT' must be sent an array reference";
 }
 
+sub usage_config_setup {
+  "The Inline::SLang option 'SETUP' must be sent either 'slsh' or 'none'.";
+}
+
 sub validate {
   my $o = shift;
     
@@ -98,6 +130,7 @@ sub validate {
   $o->{ILSM}{EXPORT}  = undef;
   $o->{ILSM}{bind_ns} = [ "Global" ];
   $o->{ILSM}{bind_slfuncs} = [];
+  $o->{ILSM}{slang_setup} = "slsh"; # valid values are none or slsh
 
   # loop through the options    
   my $flag = 0;
@@ -139,6 +172,15 @@ sub validate {
       next;
     } # EXPORT
 
+    if ( $key eq "SETUP" ) {
+      my $type = ref($value);
+      croak usage_config_setup()
+	unless $type eq "" and 
+	( $value eq "slsh" or $value eq "none" );
+      $o->{ILSM}{slang_setup} = $value;
+      next;
+    } # SETUP
+
     print usage_validate $key;
     $flag = 1;
   }
@@ -154,7 +196,12 @@ sub validate {
 
 #==========================================================================
 # Pass the code off to S-Lang, let it interpret it, and then
-# parse the namespaces to find the functions
+# parse the namespaces to find the functions.
+#
+# We also call the "setup as slsh" code (if required) here. We do it here,
+# rather than in the BOOT code of the module, so that users can turn it
+# on or off as they require. It has to be done before the user-supplied code
+# is evaluated (to ensure that user-defined routines are available).
 #
 # Have considered allowing a compile-time option to use a
 # byte-compiled version of the code, but decided it was too
@@ -171,6 +218,12 @@ sub build {
     # Filter the code
     $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
 
+    # do we have to setup the interpreter?
+    #
+    if ( $o->{ILSM}{slang_setup} eq "slsh" ) {
+	sl_setup_as_slsh ();
+    }
+
     # bind_ns = [ $ns1, ..., $nsN ]
     # where $ns1 is either the name of the S-Lang
     # namespace (eg "Global") or "Global=foo", 
@@ -179,16 +232,16 @@ sub build {
     # (not sure if this is really necessary, but it's easy
     #  to implement ;)
     #
-    # the keys of %ns_map are the S-Lang namespace names,
+    # The keys of %ns_map are the S-Lang namespace names,
     # and the value the Perl package name (they're going to
     # be the same for virtually all cases)
     #
     # It's complicated by allowing bind_ns = "All", which says
-    # to bind all known namespaces. We only allow this for
-    # S-Lang librarise >= 1.4.7 (since we use the _get_namespaces()
-    # function). Use with an earlier S-Lang library causes the
-    # code to die (could try and reset to ["Global"] in this
-    # case but I think that's going to cause confusion/errors.
+    # to bind all known namespaces.
+    #
+    # Since we use the _get_namespaces() routine we require
+    # S-Lang >= v1.4.7. This is checked for by Makefile.PL
+    # so we can assume it is true here.
     #
     # It's also complicated by allowing the user to specify
     # S-Lang intrinsic functions that are to be bound
@@ -204,12 +257,6 @@ sub build {
       if ( $bind_ns =~ "^Global" ) { $bind_ns = [ $bind_ns ]; }
       else {
 	# if "All" then we have to list all the namespaces,
-	# but this is only avalable in >= 1.4.7
-	#
-	my $ver = sl_eval("_slang_version");
-	die "You need at least v1.4.7 of the S-Lang library to use the BIND_NS = \"All\" option." 
-	  if $ver < 10407;
-
 	# we will need to append to this after running sl_eval()
 	$bind_ns = sl_eval( "_get_namespaces();" );
 	$bind_all_ns = 1;
@@ -488,12 +535,13 @@ sub DESTROY {
     $o->mkpath($odir) unless -d $odir;
 
     my $parse_info = Inline::denter->new->indent(
-	*namespaces => \%namespaces,
-        *sl_types   => $dtypes,
-        *pl_code    => $pl_code,
-        *ns_map     => \%ns_map,
-	*code       => $o->{ILSM}{code},
-	*export     => $export,
+	*namespaces  => \%namespaces,
+        *sl_types    => $dtypes,
+        *pl_code     => $pl_code,
+        *ns_map      => \%ns_map,
+	*code        => $o->{ILSM}{code},
+	*export      => $export,
+	*slang_setup => $o->{ILSM}{slang_setup},
     );
 
     my $odat = $o->{API}{location};
@@ -550,18 +598,31 @@ sub load {
     #   (part of the build routine)
     #
     unless ( $o->{ILSM}{built} ) {
+
       my $fh = IO::File->new( "< $o->{API}{location}" )
 	or croak "Inline::SLang couldn't open parse information!";
       my $sldat = join '', <$fh>;
       $fh->close();
 
       my %sldat = Inline::denter->new->undent($sldat);
-      $o->{ILSM}{namespaces} = $sldat{namespaces};
-      $o->{ILSM}{sl_types}   = $sldat{sl_types};
-      $o->{ILSM}{pl_code}    = $sldat{pl_code};
-      $o->{ILSM}{ns_map}     = $sldat{ns_map};
-      $o->{ILSM}{code}       = $sldat{code};
-      $o->{ILSM}{EXPORT}     = $sldat{export};
+      $o->{ILSM}{namespaces}  = $sldat{namespaces};
+      $o->{ILSM}{sl_types}    = $sldat{sl_types};
+      $o->{ILSM}{pl_code}     = $sldat{pl_code};
+      $o->{ILSM}{ns_map}      = $sldat{ns_map};
+      $o->{ILSM}{code}        = $sldat{code};
+      $o->{ILSM}{EXPORT}      = $sldat{export};
+      $o->{ILSM}{slang_setup} = $sldat{slang_setup};
+
+      # Do we have to setup the interpreter?
+      # Note: we use the value stored in the config file
+      #   (ie that used when the code was originally parsed)
+      #   rather than the user-supplied one. The values should
+      #   be the same (if they aren't then there should have been
+      #   a re-compile anyway to make them the same...)
+      #
+      if ( $o->{ILSM}{slang_setup} eq "slsh" ) {
+	sl_setup_as_slsh();
+      }
 
       # Run it
       eval { sl_eval( $o->{ILSM}{code} ); };

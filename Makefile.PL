@@ -4,6 +4,32 @@
 #   (Neil Watkiss), although all errors should be assumed to
 #   be mine and not Neil's
 #
+
+#
+# This software is Copyright (C) 2003, 2004, 2005 Smithsonian
+# Astrophysical Observatory. All rights are reserved.
+# 
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# 02111-1307 USA
+# 
+# Or, surf on over to
+# 
+#  http://www.fsf.org/copyleft/gpl.html
+#
+
+#
 # Notes:
 #  - we use Inline::C to interface to the S-Lang library (prior to
 #    0.22 we had the code in an external file which we compiled
@@ -624,7 +650,7 @@ die "Error: unable to find the config file - expected it to be:\n" .
     " -< $config_file\n\n"
     unless -e $config_file;
 unlink( $config_file )
-    or die "Error: unable to delet Inline config file:\n" .
+    or die "Error: unable to delete Inline config file:\n" .
     " -> $config_file\n\n";
 
 
@@ -698,7 +724,8 @@ $paths
     --debug   Turn on diagnostic print statements (a *lot* of
               screen output)
 
-    --wall    Compile with "-Wall" (default is --nowall)
+    --wall    Compile with "-Wall"
+    --nowall  Do not compile with "-Wall" (default)
 
 END
 

@@ -1,6 +1,51 @@
 # Revision history for Inline::SLang
 
 --
+version: 1.00
+date:    Tue Jan  4 12:02:37 EST 2005
+changes:
+
+There has been only one minor change to the previous version (v0.30).
+
+- The initialisation of the S-lang interpreter now more-closely mirrors
+  that used by the slsh application. This means that:
+    - The interpreter's load path is set to the SLSH_PATH environment
+      variable (if set). This path can be read/set using the S-Lang
+      intrinsics get_slang_load_path() and set_slang_load_path().
+    - The "system" slsh.rc file is processed. This file is looked for
+      (in order), the SLSH_CONF_DIR and SLSH_LIB_DIR environment
+      variables and, if they do not exist, in one of
+        /usr/local/etc:/usr/local/slsh:/etc:/etc/slsh
+    - The "user" ~/.slshrc file is processed. This file is looked for
+      in the directory given by the HOME environemnt variable.
+
+   This was primarily added to support the changes made to the S-Lang
+   support in CIAO 3.2 - e.g. the use of require() to load modules - but
+   may be useful elsewhere.
+
+   This support is on by default but can be turned off by adding
+     use Inline SLang => CONFIG => 'none';
+   to your script.
+
+   The function sl_setup_called() can be used to determine if the
+   slsh support was loaded (a value other than 0). The routine
+   sl_setup_as_slsh() can be used to call this initialisation code
+   after the S-Lang code has been processed (in the unlikely event this
+   is needed).
+
+   Unfortunately the support is currently only for UNIX systems so there
+   may be problems when the module is compiled.
+
+- The documentation has been updated to better match the module and
+  to clean up a few areas. The list of previous changes can now be
+  found in the Inline::SLang::Changes documentation, with Inline::SLang
+  only listing the changes in the current version.
+
+- Improvements to the test suite.
+
+- A copyright statement has been added to the source files.
+
+--
 version: 0.30
 date:    Tue Jun  8 21:00:16 EDT 2004
 changes:

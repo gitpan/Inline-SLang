@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 97;
+use Test::More tests => 101;
 
 use Inline 'SLang';
 
@@ -47,6 +47,17 @@ is( $#$ret1, 1,        'array int returned 2 items' );
 is( $$ret1[0], 3,      '                   [0] == 3' );
 is( $$ret1[1], 5,      '                   [0] == 5' );
 is( defined $ret2, '', '                   and no second item' );
+
+## S-Lang 2 perl: 'indexed' arrays
+
+$ret1 = array_index();
+ok( eq_array( $ret1, [4,12,10,18] ), 'check of indexed array 1D' );
+$ret1 = array_index_x(0);
+ok( eq_array( $ret1, [2,4,6] ), 'check of indexed array x[0]' );
+$ret1 = array_index_x(2);
+ok( eq_array( $ret1, [14,16,18] ), 'check of indexed array x[2]' );
+$ret1 = array_index_y(1);
+ok( eq_array( $ret1, [4,10,16] ), 'check of indexed array y[1]' );
 
 ## S-Lang 2 perl: "uncommon" types
 
@@ -252,6 +263,14 @@ __SLang__
 % integers
 define arrayi2 () { return [2]; }
 define arrayi35 () { return [3,5]; }
+
+% check we can handle "indexed" arrays
+%
+private variable long_array1D = [1:9] * 2;
+private variable long_array2D = _reshape( long_array1D, [3,3] );
+define array_index ()    { return long_array1D[[1,5,4,8]]; }
+define array_index_x (x) { return long_array2D[x,*]; }
+define array_index_y (y) { return long_array2D[*,y]; }
 
 % force the data types into "uncommon" ones
 define array_ui () {

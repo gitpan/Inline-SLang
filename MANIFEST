@@ -13,6 +13,7 @@ examples/info.pl
 examples/named_struct.pl
 examples/order.pl
 examples/structs.pl
+examples/trap_errors.pl
 examples/types.pl
 examples/types_struct.pl
 examples/use_anytype.pl
@@ -34,11 +35,15 @@ SLang.pod
 SLang.xs
 SLang/Array.pod
 SLang/Assoc.pod
+SLang/Changes.pod
 SLang/Config.pod
 SLang/Details.pod
 SLang/Struct.pod
 SLang/Types.pod
+t/.slshrc
 t/00init.t
+t/01setup1.t
+t/01setup2.t
 t/02bind_all.t
 t/02bind_foo.t
 t/02bind_global.t
@@ -56,6 +61,7 @@ t/12arrays2slang.t
 t/12arrays2slang_pdl.t
 t/13assoc.t
 t/14struct.t
+t/slsh.rc
 TODO
 util.c
 util.h

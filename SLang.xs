@@ -1,11 +1,35 @@
 /****************************************************************************
  *
- * $Id: SLang.xs,v 1.31 2004/06/08 22:08:01 dburke Exp $
+ * $Id: SLang.xs,v 1.34 2005/01/03 23:37:43 dburke Exp $
  *
  * SLang.xs
  *   Inline::SLang method bindings.
  *
  ****************************************************************************/
+
+/*
+This software is Copyright (C) 2003, 2004, 2005 Smithsonian
+Astrophysical Observatory. All rights are reserved.
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA
+
+Or, surf on over to
+
+  http://www.fsf.org/copyleft/gpl.html
+*/
 
 #include "util.h"
 #include "pdl.h"
@@ -46,6 +70,123 @@ void _sl_error_handler( char *emsg ) {
    */
   croak( "%s\n", emsg );
 }
+
+/*
+ * Setup routines taken from slsh/slsh.c in the v1.4.9 distribution
+ * of S-Lang.
+ *
+ * The idea is to set up the S-Lang interpreter in the same way -
+ * or as close as possible - to that used by the slsh program.
+ * I chose to use slsh as a guide since this is needed to get
+ * require() and provide() as set up in CIAO 3.2.
+ */
+
+static int setup_slang_paths (void)
+{
+   /*
+    * Unlike the slsh version we do not (yet?) allow the
+    * possibility of a default path.
+    */
+   char *libpath = getenv ("SLSH_PATH");
+   return SLpath_set_load_path (libpath);
+}
+
+static int try_to_load_slang_file (char *path, char *file, char *ns)
+{
+   int status;
+
+   if (path == NULL)
+     path = ".";
+
+   if (file != NULL)
+     {
+	file = SLpath_find_file_in_path (path, file);
+	if (file == NULL)
+	  return 0;
+     }
+
+   status = SLns_load_file (file, ns);
+   SLfree (file);
+   if (status == 0)
+     return 1;
+   return -1;
+
+} /* try_to_load_slang_file() */
+
+/*
+ * Should amalgamate the two "setup_slang_*_init_file" routines
+ */
+static int setup_slang_system_init_file (void)
+{
+   /*
+    * TODO:
+    *   This is UNIX-centric and should be made to work with other OS's.
+    */
+   char *dir;
+   int status;
+
+   dir = getenv( "SLSH_CONF_DIR" );
+   if (NULL==dir)
+     dir = getenv( "SLSH_LIB_DIR" );
+   if (NULL==dir)
+     dir = "/usr/local/etc:/usr/local/slsh:/etc:/etc/slsh";
+
+   /*
+    * For now we are quiet on failue
+    */
+   status = try_to_load_slang_file( dir, "slsh.rc", NULL );
+   if (-1==status)
+     return -1;
+   else
+     return 0;
+
+} /* setup_slang_system_init_file() */
+
+static int setup_slang_user_init_file (void)
+{
+   char *dir;
+   int status;
+
+   /*
+    * TODO:
+    *   This is UNIX-centric and should be made to work with other OS's.
+    */
+   dir = getenv( "HOME" );
+   
+   /*
+    * For now we are quiet on failue
+    */
+   status = try_to_load_slang_file( dir, ".slshrc", NULL );
+   if (-1==status)
+     return -1;
+   else
+     return 0;
+
+} /* setup_slang_user_init_file() */
+
+/*
+ * Set up the environment in a similar manner to slsh.
+ * Done as a subroutine to avoid issues with trying to use the C pre-processor
+ * in the XS-processed code below. This is currently not needed as I have
+ * removed the conditional nature of this code; i.e. it is currently
+ * always compiled.
+ */
+static int _sl_setup_as_slsh_called = 0;
+
+static void setup_as_slsh() {
+
+    if (-1 == setup_slang_paths())
+      croak("Internal error: unable to set up the paths for the S-Lang library\n");
+    if (-1 == setup_slang_system_init_file())
+      croak("Internal error: unable to load the system initialisation file\n");
+    if (-1 == setup_slang_user_init_file())
+      croak("Internal error: unable to load the user initialisation file\n");
+    Printf( ( "  - initialized S-Lang environment to match that of slsh\n" ) );
+
+    /* do not bother about this variable over-flowing */
+    _sl_setup_as_slsh_called++;
+
+} /* setup_as_slsh() */
 
 /*
  * a simple random-number generator used to store "opaque" objects
@@ -148,6 +289,20 @@ int
 sl_have_pdl( )
   CODE:
     RETVAL = I_SL_HAVE_PDL;
+  OUTPUT:
+    RETVAL
+
+# initialize the library in a similar manner to slsh
+#
+void
+sl_setup_as_slsh( )
+  CODE:
+    setup_as_slsh();
+
+int
+sl_setup_called( )
+  CODE:
+    RETVAL = _sl_setup_as_slsh_called;
   OUTPUT:
     RETVAL
 
