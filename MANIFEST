@@ -7,6 +7,7 @@ README
 SLang.pm
 SLang.pod
 SLang.xs
+SLang/Config.pod
 SLang/Types.pod
 TODO
 t/00init.t
@@ -20,5 +21,6 @@ t/04struct.t
 t/20bind_foo.t
 t/20bind_global.t
 t/20bind_many.t
+t/20bind_rename.t
 util.c
 util.h

@@ -1,6 +1,44 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.05
+date:    Fri Mar 14 11:57:31 EST 2003
+changes:
+ - Removed the namespace tests (t/20bind_foo|many.t) if S-Lang version is
+   less than 1.4.3. This should remove the CPAN testing failure.
+   If you wish to use the BIND_NS option then make sure you have at least
+   this version of S-Lang (you gain further benefits if you upgrade to
+   at least v1.4.7).
+ - Can specify the Perl package name for each S-Lang namespace to be bound
+   to (by specifying "foo=bar" in the BIND_NS config option to get S-Lang
+   namespace "foo" to be bound to the "bar" Perl package). I can't actually
+   think of a need for this.
+ - BIND_NS = "All" will bind all namespaces without having to specify them
+   individually (only available if you use v1.4.7 or higher of S-Lang)
+ - Added the BIND_SLFUNCS option to allow binding of selected S-Lang
+   intrinsic functions. We allow these functions to use a different function
+   name in Perl to that in S-Lang (specified as "slang_name=perl_name").
+ - The output of 'perl -MInline=info' has been updated to account for the
+   inproved binding schemes.
+
+ - added support for Ref_Type (both from and to S-Lang) variables (scalar
+   only). This makes use of "private" routines/structures and so should
+   be considered a hack.
+ - handling of S-Lang structs has changed to more closely match the S-Lang
+   API (in that the method names match the S-Lang function names without
+   the 'slang_')
+ - Support for "non native" types (those that are represented by an object
+   from an Inline::SLang::* class) has been standardised to use the name
+   of the S-Lang datatype: at present we have Inline::SLang::DataType_Type,
+   Inline::SLang::Struct_Type, and Inline::SLang::Ref_Type. All classes
+   provide several common methods (all classes are sub-classes of a
+   hidden base class).
+   This has the side effect of making the class names even more verbose.
+
+ - Documentation for configuration of Inline::SLang has been moved from
+   Inline::SLang to Inline::SLang::Config. 
+
+--
 version: 0.04
 date:    Fri Mar  7 00:14:47 EST 2003
 changes:

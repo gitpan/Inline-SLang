@@ -2,7 +2,7 @@
 Tests
 -----
 
-- Perl Inline::SLang::Struct objects to S-Lang structs:
+- Perl Inline::SLang::Struct_Type objects to S-Lang structs:
     Leak memory (converting the other way seems okay [is this really
     true/supported?])
 
@@ -12,44 +12,24 @@ Tests
 - Memory leaks:
   Have started leak tests but it's not been comprehensive.
 
-- Need to test the integer types more fully.
-
 S-Lang to Perl
 --------------
 
+  - work out how to "support" unknown types: can we use a perl
+    object (Inline::SLang::OpaqueType say)? To do anything with it you
+    would have to pass it back to a S-Lang function - so like
+    the current design of the Inline::SLang::Ref_Type object.
+    As an example:
+
+      my $reg = regParse( "circle(100,200,20)" );
+      reg_some_other_routine( $reg, ... );
+
   - improve the support of 1D & 2D arrays
   - add support for nD arrays
+  - use PDL
 
  Functions:
   - handle reference types; are there others that are needed?
-
-  - binding functions
-    The BIND_NS option can be used to define the namespaces
-    to bebound (ie only those functions within these namespaces
-    will be bound). The default value is ["Global"]
-
-    Global functions are bound to the "top" level namespace
-    Other namespaces are bound to perl's <namespace>:: namespace
-    (ie S-Lang's foo->bar() becomes Perl's foo:bar()).
-
-    a) we may need to include a mapping from S-Lang namespace to
-       Perl namespace (in case of conflicts)
-    b) how to specify 'all known namespaces'? this may not be known
-       when the program is written (unlikely but possible)
-
-  - do we bind intrinsic functions?
-    We should at least bind eval() - both because we can use it
-    and so that users can execute S-Lang code outside of the
-    normal Inline way of doing things.
-
-    Can have a compile-time argument which lists those functions
-    from the Global namespace you want binding: these would then
-    either be removed from the orig_ns array (so will be bound
-    automatically), OR we bind them separately, including adding
-    a sl_ prefix (say), or binding into a special namespace.
-
-    note: users can always write a wrapper routine which will
-    get bound to get around this issue for the moment
 
  Variables:
   - do we want to allow access to S-Lang variables (ie have them
@@ -70,9 +50,6 @@ General
      plain perl, return as a single 'string', as a piddle
 
  - improve documentation
-
- - need to find out why unable to import some modules that can
-   be imported by slsh [is this still valid?]
 
  - do we allow users to 're-bind' the S-Lang interpreter during
    a program: ie program loads and S-Lang is bound to Perl; user

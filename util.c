@@ -51,11 +51,22 @@ s2 s  SLANG_COMPLEX_TYPE       Math::Complex
 
 ?     SLANG_ASSOC_TYPE         hash reference
 
-s     SLANG_STRUCT_TYPE        Inline::SLang::struct
+s     SLANG_STRUCT_TYPE        Inline::SLang::Struct_Type
 
-s2 s  SLANG_DATATYPE_TYPE      Inline::SLang::datatype
+  NOTE: Should typedef-fed structures be subclasses of Inline::SLang::struct
+   so 'typedef struct { foo, bar } FooBar_Struct;' would create an
+   object of class Inline::SLang::struct::FooBar_Struct ?
+   Prefer if could be Inline::SLang::FooBar_Struct [but still a sub-class
+     of Struct_Type]
+
+s2 s  SLANG_DATATYPE_TYPE      Inline::SLang::DataType_Type
+
+s     SLANG_REF_TYPE           Inline::SLang::Ref_Type
 
 ?     SLANG_FILE_PTR_TYPE      should be able to convert to a perl IO variable
+
+?  ?  memory-managed types     Inline::SLang::mmt ???
+                               or can we find out their name and use that?
 
 Are we going to support these?
 ------------------------------
@@ -68,7 +79,6 @@ SLANG_ANY_TYPE - should be easy to support since can just convert
 SLANG_UNDEFINED_TYPE - convert to undef ?
 
 SLANG_VOID_TYPE
-SLANG_REF_TYPE
 
 SLANG_ISTRUCT_TYPE - what is this - an intrinsic structure?
 
@@ -111,7 +121,6 @@ _clean_slang_vars( int n ) {
   }
 } /* _clean_slang_vars() */
 
-
 /*
  * convert perl variables to S-Lang variables
  *
@@ -123,7 +132,7 @@ _clean_slang_vars( int n ) {
  * - push NULL onto the stack for those variables we do not understand
  *   also - as an aid to debugging - print messages to STDERR
  *   NEED to work out how to inform the calling program that this
- *   transformation has taken place
+ *   transformation has taken place (or do we?)
  */
 
 void
@@ -179,11 +188,12 @@ pl2sl( SV *item ) {
     return;
   } /* Math::Complex */
 
-  /* Inline::SLang::datatype */
-  if ( sv_isobject(item) && sv_derived_from(item, "Inline::SLang::datatype" ) ) {
+  /* Inline::SLang::DataType_Type */
+  if ( sv_isobject(item) &&
+       sv_derived_from(item, "Inline::SLang::DataType_Type" ) ) {
     char *name;
 
-    Printf( ("*** converting Inline::SLang::datatype to S-Lang Datatype_Type\n") );
+    Printf( ("*** converting Inline::SLang::DataType_Type to S-Lang Datatype_Type\n") );
 
     /* de-reference the object (we can do this since it's our class) */
     name = SvPV_nolen( SvRV(item) );
@@ -199,19 +209,53 @@ pl2sl( SV *item ) {
     if ( -1 == SLang_load_string( name ) ) /* ignores the trailing ';' that we should have */
       croak( "Unable to create a DataType_Type on the stack" );
     return;
-  } /* Inline::SLang::datatype */
+  } /* Inline::SLang::DataType_Type */
+
+  /* Inline::SLang::Ref_Type */
+  if ( sv_isobject(item) &&
+       sv_derived_from(item, "Inline::SLang::Ref_Type" ) ) {
+
+    /*
+     * This is not an ideal way to do it since it relies on
+     * peaking at library internals - see comments in util.h
+     */
+    extern int _SLang_push_ref( int is_global, VOID_STAR ptr );
+    _Inline_SLang_Ref_Type *sl_ref;
+    /*** SLang_Ref_Type *sl_ref; ***/
+
+    SLang_Ref_Type *pl_ref;
+
+    Printf( ("*** converting Inline::SLang::Ref_Type to S-Lang Ref_Type\n") );
+    fixme( "stop using library internal routines/structures to access ref types" );
+
+    /*
+     * de-reference the object (we can do this since it's our class)
+     * - do we need the SvIV() ?
+     */
+    pl_ref = INT2PTR( SLang_Ref_Type *, SvIV(SvRV(item)) ); 
+
+    /*
+     * push the reference onto the stack
+     */
+    sl_ref = (_Inline_SLang_Ref_Type *) pl_ref;
+    if ( -1 ==
+         _SLang_push_ref( sl_ref->is_global, (VOID_STAR) sl_ref->v.nt ) )
+      croak( "Error: unable to push a Ref_Type object onto the stack" );
+    return;
+  } /* Inline::SLang::Ref_Type */
 
   /*
-   * Inline::SLang::struct
+   * Inline::SLang::Struct_Type
    */
-  if ( sv_isobject(item) && sv_derived_from(item, "Inline::SLang::struct" ) ) {
+  if ( sv_isobject(item) &&
+       sv_derived_from(item, "Inline::SLang::Struct_Type" ) ) {
 
     SV *dstruct;
     SV *aref;
     AV *fields;
     I32 nfields, i;
 
-    Printf( ("*** converting Perl's Inline::SLang::struct to S-Lang Struct_Type\n") );
+    Printf( ("*** converting Perl's Inline::SLang::Struct_Type to S-Lang Struct_Type\n") );
     fixme( "memleak" );
 
     /*
@@ -223,7 +267,7 @@ pl2sl( SV *item ) {
      * fields from their perl representation to their S-Lang one
      *
      * one possible improveement (if it works) is to only call
-     * Inline::SLang::struct's get() method once - ie stick all
+     * Inline::SLang::Struct_Type's get_field() method once - ie stick all
      * the items onto the Perl stack in one go
      */
 
@@ -234,7 +278,7 @@ pl2sl( SV *item ) {
       croak("Internal Error: unable to create a struct in $1\n");
 
     /* return the field names (as a string array) */
-    CALL_METHOD_SCALAR_SV( item, "fields", , aref );
+    CALL_METHOD_SCALAR_SV( item, "get_field_names", , aref );
     //    aref = sv_2mortal( aref ); // randomly trying things
     fields = (AV *) SvRV( aref );
     nfields = 1 + av_len( fields );
@@ -256,7 +300,7 @@ pl2sl( SV *item ) {
       if ( -1 == SLang_push_string( SvPV_nolen(*name) ) )
 	croak( "Unable to push a string onto the stack" );
 
-      CALL_METHOD_SCALAR_SV( item, "get", C2PL_MARG( *name );, value );
+      CALL_METHOD_SCALAR_SV( item, "get_field", C2PL_MARG( *name );, value );
       // pl2sl( sv_2mortal(value) );  // randomly trying things
       pl2sl( value );
       
@@ -277,7 +321,7 @@ pl2sl( SV *item ) {
     _clean_slang_vars(3);
     return;
 
-  } /* Inline::SLang::struct */
+  } /* Inline::SLang::Struct_Type */
 
   /* an array reference: always set to SLANG_ANY_TYPE */
   if ( SvROK(item) && SvTYPE(SvRV(item)) == SVt_PVAV ) {
@@ -337,7 +381,7 @@ pl2sl( SV *item ) {
 
     croak( "Internal Error: currently unable to convert perl hash references\n to S-Lang associative arrays" );
 
-    /* create an assoc type array containint Any_Type variables */
+    /* create an assoc type array containing Any_Type variables */
 
     /***
 	o = rb_hash_new();
@@ -371,7 +415,6 @@ pl2sl( SV *item ) {
          _get_object_type(item) );
     } else
       fprintf( stderr, "Internal Error: unable to handle this type of perl variable\n" );
-
     if ( -1 == SLang_push_null() )
       croak( "Unable to push a NULL onto the stack" );
 
@@ -474,7 +517,7 @@ sl2pl1D( SLang_Array_Type *at ) {
       	av_store( parray, i,
       		  sv_bless(
 			   newRV_noinc( newSVpv( SLclass_get_datatype_name(dtype), 0 ) ),
-			   gv_stashpv("Inline::SLang::datatype",1) )
+			   gv_stashpv("Inline::SLang::DataType_Type",1) )
       		  );
 
       } /* for: i */
@@ -614,7 +657,7 @@ sl2pl2D( SLang_Array_Type *at ) {
 	  av_store( yarray, j,
 		    sv_bless(
 			     newRV_inc( newSVpv( SLclass_get_datatype_name(dtype), 0 ) ),
-			     gv_stashpv("Inline::SLang::datatype",1) )
+			     gv_stashpv("Inline::SLang::DataType_Type",1) )
 		    );
 
 	} /* for: j */
@@ -665,6 +708,8 @@ sl2plND( SLang_Array_Type *at ) {
 
 SV *
 sl2pl( void ) {
+
+  /* should we really be using SLtype instead of int? */
   int type = SLang_peek_at_stack();
 
   /*
@@ -879,7 +924,7 @@ sl2pl( void ) {
       Printf( ("  stack contains: structure\n") );
 
       /*
-       * return an Inline::SLang::struct object
+       * return an Inline::SLang::Struct_Type object
        * - handle similarly to associative arrays, in that
        *   we take advantage of the S-Lang stack
        */
@@ -893,10 +938,10 @@ sl2pl( void ) {
       Printf( ("Number of fields in the structure = %d\n", nfields ) );
 
       /*
-       * create the Inline::SLang::struct object 
+       * create the Inline::SLang::Struct_Type object 
        */
       CALL_METHOD_SCALAR_SV(
-        sv_2mortal(newSVpv("Inline::SLang::struct",0)), 
+        sv_2mortal(newSVpv("Inline::SLang::Struct_Type",0)), 
         "new", XPUSHs(fieldsref);, object );
 
       /*
@@ -921,7 +966,7 @@ sl2pl( void ) {
 
 	/* set the field: the value is read from the S-Lang stack */
         CALL_METHOD_VOID( object,
-                          "set",
+                          "set_field",
                           XPUSHs(*name); XPUSHs( sv_2mortal(sl2pl()) ); );
 
       } /* for: i */
@@ -936,7 +981,7 @@ sl2pl( void ) {
     {
       /*
        * store the datatype value as a string of the name,
-       * into an Inline::SLang::datatype object
+       * into an Inline::SLang::DataType_Type object
        * we let S-Lang do the conversion to a string
        *
        * ideally would pop the datatype off the stack and then
@@ -955,7 +1000,7 @@ sl2pl( void ) {
       return
 	sv_bless(
 		 newRV_noinc( sl2pl() ),
-		 gv_stashpv("Inline::SLang::datatype",1)
+		 gv_stashpv("Inline::SLang::DataType_Type",1)
 		 );
       break;
 
@@ -973,8 +1018,73 @@ sl2pl( void ) {
       break;
     } /* FILE_PTR */
 
+  case SLANG_REF_TYPE:
+    {
+      /*
+       * store as a Inline::SLang::Ref_Type object
+       * - relies on S-Lang to work out if the referenced object
+       *   remains in scope
+       */
+      SLang_Ref_Type *sl_ref;
+      SV *pl_val;
+      SV *pl_ref;
+
+      if ( -1 == SLang_pop_ref( &sl_ref ) )
+	croak( "Error: unable to pop a reference from the stack\n" );
+      
+      Printf( ("DBG: S-Lang ref pointer = %p\n", sl_ref) );
+
+      pl_val = sv_2mortal( newSViv( PTR2IV((void *) sl_ref) ) );
+      pl_ref = newRV_inc( pl_val );
+
+      return
+	sv_bless( pl_ref, gv_stashpv("Inline::SLang::Ref_Type",1) );
+      break;
+    } /* REF */
+
   default:
-    croak( "Error: unable to handle a variable with S-Lang type of %d\n", type );
+    {
+#ifdef UGLY_HACKS
+
+      /* 
+       * pop the object off the stack and then see if we can work
+       * with it
+       *
+       * note:
+       *   not good - using a 'private' function to access the class 
+       *   information
+       * 
+       *   also, assuming that SLang_Object_Type == SLang_Any_Type
+       *   (which it does now, but can we guarantee that?)
+       */
+
+      SLang_Any_Type *obj;
+
+      SLang_Class_Type *_SLclass_get_class( SLtype );
+      SLang_Class_Type *cl = _SLclass_get_class( (SLtype) type );
+      int class_id = SLclass_get_class_id( cl );
+
+      fixme( "handling of a 'general' S-Lang variable" );
+
+      Printf( ("Trying to handle an unknown type") );
+      if ( -1 == SLang_pop_anytype(&obj) )
+	croak("Error: unable to pop the next item off the stack");
+
+      printf( "popped off an anytype object\n" );
+      printf( "  [stack]   type=%d and class id=%d\n", type, class_id );
+      printf( "  [anytype] type=%d\n", obj->data_type );
+
+      croak( "Error: handliong of unknown types is not yet finished.\n" );
+
+      /* currently can't get here */
+      SLang_free_anytype( obj );
+      return;
+
+#endif /* UGLY_HACKS */
+
+      croak( "Error: unable to handle a variable with S-Lang type of %d\n", type );
+
+    } /* default */
   }
 
 } /* sl2pl() */

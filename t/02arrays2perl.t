@@ -113,11 +113,11 @@ is( "$$ret1[1][0] $$ret1[1][1] $$ret1[1][2]",
 $ret1 = array_dtypes();
 is( ref($ret1), "ARRAY", "1D array of DataType_Type's returned as an array reference" );
 is( $#$ret1, 4, "and contains 5 elements" );
-isa_ok( $$ret1[0], "Inline::SLang::datatype" );
-isa_ok( $$ret1[1], "Inline::SLang::datatype" );
-isa_ok( $$ret1[2], "Inline::SLang::datatype" );
-isa_ok( $$ret1[3], "Inline::SLang::datatype" );
-isa_ok( $$ret1[4], "Inline::SLang::datatype" );
+isa_ok( $$ret1[0], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[1], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[2], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[3], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[4], "Inline::SLang::DataType_Type" );
 is( join(" ",map { "$_" } @$ret1), "Array_Type UInteger_Type Float_Type Assoc_Type DataType_Type",
 	"The datatypes are converted correctly" );
 
@@ -127,10 +127,10 @@ is( ref($ret1), "ARRAY", "2D array of data ypes returned as an array reference" 
 is( $#$ret1, 2, "and nx = 3" );
 is( $#{$$ret1[0]}, 1, "and ny = 2" );
 
-isa_ok( $$ret1[0][0], "Inline::SLang::datatype" );
-isa_ok( $$ret1[0][1], "Inline::SLang::datatype" );
-isa_ok( $$ret1[1][0], "Inline::SLang::datatype" );
-isa_ok( $$ret1[2][1], "Inline::SLang::datatype" );
+isa_ok( $$ret1[0][0], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[0][1], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[1][0], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[2][1], "Inline::SLang::DataType_Type" );
 
 # stringify the values as an easy way to check the values
 is( "$$ret1[0][0] $$ret1[0][1]",

@@ -7,12 +7,12 @@ Inline::SLang - Write Perl subs in S-Lang.
   print "9 + 16 = ", add(9,16), "\n";
   print "9 - 16 = ", subtract(9,16), "\n";
   print JAxH('Inline'), "\n";
-  
+
   use Inline SLang;
-  
+
   __END__
   __SLang__
-  
+
   define add      (a,b) { return a + b; }
   define subtract (a,b) { return a - b; }
 
@@ -59,8 +59,11 @@ want an interface to the terminal library provided by S-Lang.
 Using Inline::SLang will seem very similar to using any other Inline
 language, thanks to Inline's consistent look and feel.
 
-This section will explain the different ways to use Inline::SLang. For
-more details on C<Inline>, see 'perldoc Inline'.
+This section will explain the different ways to use Inline::SLang.
+Further details on configuring the behaviour of C<Inline::SLang>
+can be found in L<Inline::SLang::Config>.
+For more details on C<Inline>, see L<Inline> or
+C<perldoc Inline>.
 
  ***
  *** The following looks like it should be okay, although
@@ -72,56 +75,6 @@ more details on C<Inline>, see 'perldoc Inline'.
  *** namespace for packages which hasn't been passed through
  *** modules@perl.org
  ***
-
-The C<info> option of L<Inline|Inline> can be useful to see
-what has (and has not) been bound to Perl. As an example
-try:
-
-  perl -MInline=INFO <<FOO
-  use Inline SLang;
-  # let's not actually do anything
-  __END__
-  __SLang__
-  variable foobar = "a string";
-  define foo()  { return foobar; }
-  define bar(x) { foobar = x; }
-  FOO
-
-The relevant part of the output (as of version 0.04 of 
-C<Inline::SLang>) is:
-
-  Configuration details
-  ---------------------
-
-  Version of S-Lang library:
-          compiled against 1.4.5
-          using            1.4.5
-
-  The following S-Lang functions have been bound to Perl:
-
-  Namespace Global contains 2 bound function(s).
-          bar()
-          foo()
-
-Note that there are no checks that a S-Lang symbol,
-when mapped to Perl, does not clobber an existing value
-(or is a Perl built-in function so can't be over-ridden).
-So I<beware> when you define a S-Lang function called 
-C<open()>!
-
-=head2 Variables
-
-We currently do not bind any variables to Perl.
-To access variables you have to write S-Lang routines
-that read/write the variable. Examples of this are 
-the C<foo()> and C<bar()> routines in the example
-above.
-
-It should not be too hard to also bind variables to Perl
-functions; this would make it easy to read, but setting
-them would (?) require making use of the I<lvalue> support
-in recent Perl's. 
-Currently it's not a very high priority issue (and may never be).
 
 =head2 Functions
 
@@ -143,71 +96,36 @@ functions (the functions defined by the S-Lang interpreter,
 such as C<array_map()> and C<assoc_get_keys()>) - in the 
 default namespace ("Global") are bound to Perl. The
 Perl functions are available in the C<main> package.
-If you want to call a S-Lang intrinsic
-function from Perl then - currently - you have to define
-a S-Lang function of your own that calls the intrinsic
-function. 
 
- ***
- *** One idea I have is to allow the user to specify a
- *** list of S-Lang intrinsic functions that they want
- *** to bind to Perl.
- ***
+The C<BIND_NS> configuration option can be used to
+change the list of S-Lang namespaces bound to Perl.
+If you have need of an intrinsic S-Lang function then
+you can either write a wrapper routine or use the
+C<BIND_SLFUNCS> option.
+See L<Inline::SLang::Config> for more details.
 
-=head3 Using S-Lang functions in namespaces other than "Global"
+Note that there are no checks that a S-Lang symbol,
+when mapped to Perl, does not clobber an existing value
+(or is a Perl built-in function so can not be over-ridden).
+So I<beware> when you define a S-Lang function called 
+C<open()>!
 
-Use the C<BIND_NS> configure option
-to bind functions in namespaces other than "Global".
-It takes either a string or array reference
-(of strings) listing the namespaces to use. Note that if
-you do use BIND_NS then you should probably include
-"Global" as a value!
+=head2 Variables
 
-These extra functions will be main available in the Perl
-package whose name equals that of the S-Lang namespace
-(see below for examples). One idea for the future is to
-allow a S-Lang namespace to be mapped to a Perl package
-with a different name (e.g. to get around namespace
-conflict issues). This is not too important since you 
-I<should> be able to use
-the 2-parameter forms of S-Lang's C<import> and
-C<evalfile> commands to change the name of the
-S-Lang namespace the routines are added to.
+We currently do not bind any variables to Perl.
+To access variables you have to write S-Lang routines
+that read/write the variable, as shown by the
+C<foo()> and C<bar()> routines below:
 
-=over 3
+  variable foobar = "a string";
+  define foo()  { return foobar; }
+  define bar(x) { foobar = x; }
 
-=item Example - only using the namespace 'foo':
-
- use Inline 'SLang' => Config => BIND_NS => "foo";
- use Inline 'SLang' => <<'EOS1';
-  define fn_in_global(x) { "in global"; }
-  implements( "foo" );
-  define fn_in_foo(x) { "in foo"; }
- EOS1
-
- # this works
- printf "I am in %s\n", foo::fn_in_foo("dummyval");
-
- # this does not work since fn_in_global is not
- # in the foo namespace
- printf "I am in %s\n", fn_in_global("dummyval");
-
-=item Example - using multiple namespaces:
-
- use Inline 'SLang' => Config => BIND_NS => [ "Global", "foo" ];
- use Inline 'SLang' => <<'EOS1';
-  define fn_in_global(x) { "in global"; }
-  implements( "foo" );
-  define fn_in_foo(x) { "in foo"; }
- EOS1
-
- # this works
- printf "I am in %s\n", foo::fn_in_foo("dummyval");
-
- # as does this
- printf "I am in %s\n", fn_in_global("dummyval");
-  
-=back
+It should not be too hard to also bind variables to Perl
+functions; this would make it easy to read, but setting
+them would (?) require making use of the I<lvalue> support
+in modern versions of Perl. 
+Currently it's not a very high priority issue (and may never be).
 
 =head2 Supported Data Types
 
@@ -222,41 +140,15 @@ where there is a direct match between S-Lang and Perl, the
 conversion is not noticeable. For more complicated
 types - such as complex numbers - S-Lang variables are
 converted to Perl objects.
-See the L<Inline::SLang::Types|Inline::SLang::Types>
-document for more information on how the various data types are
+See L<Inline::SLang::Types>
+for more information on how the various data types are
 supported.
 
 The module currently assumes that yor S-Lang library has been compiled
 with support for both floating-point and complex numbers.
 
-Note that, as of version 0.04, the support is much better
+Note that, in version 0.05, the support is much better
 for converting from S-Lang to Perl than the other way around.
-
-=head2 S-Lang Configuration Options
-
-For information on how to specify Inline configuration options, see
-L<Inline>. This section describes each of the configuration options
-available for S-Lang.
-
-=over 4
-
-=item BIND_NS
-
-This option - which takes either a string or a reference to
-an array of stringe - specifies what S-Lang namespaces should
-be searched for functions. The default value is "Global".
-
-Example:
-
-  # to bind to functions in the Global, foo, and bar namespaces
-  use Inline SLang => Config => BIND_NS => ["Global","foo","bar"],
-
-=back
-
-One possible option would be to allow the S-Lang code to be 
-byte-compiled, which may provide a speed-improvement when
-loading. However, the speed improvement may not be worth
-the extra effort/checks necessary in the code.
 
 =head1 SUPPORTED PLATFORMS
 
@@ -267,8 +159,13 @@ the extra effort/checks necessary in the code.
 The module is designed to work with version 1.4.x of the S-Lang
 library, although I make no promises for anything earlier than 1.4.4.
 
-S-Lang versions tested: 1.4.0 (linux), 1.4.4 (solaris),
-1.4.7 (linux & solaris)
+The support for the BIND_NS option is flaky prior to
+v1.4.3 (it appears to be due to S-Lang and not this module).
+Also, use of the "All" option is restricted to those
+systems using version v1.4.7 or higher. So I suggest upgrading!
+
+S-Lang versions tested: 1.4.4 (solaris),
+1.4.8 (linux & solaris)
 
 Inline::S-Lang has so far been tested on Linux and Solaris 2.8
 only. It should work on UNIX platforms; I would be surprised if 
@@ -288,7 +185,7 @@ there will be lots of bugs and deficiencies.
 
 =head1 SEE ALSO
 
-L<Inline::SLang::Types>, L<Term::Slang>
+L<Inline::SLang::Config>, L<Inline::SLang::Types>, L<Term::Slang>
 
 For information about using C<Inline>, see L<Inline>.
 
@@ -308,6 +205,57 @@ any way related to the above people.
 =head1 CHANGES
 
 =over 4
+
+=item v0.05 Fri Mar 14 11:57:31 EST 2003
+
+Notable changes are:
+
+=over 4
+
+=item *
+
+Handling of 'foreign' S-Lang types - those for which we
+have introduced special classes such as C<DataType_Type>
+variables - has been changed to use a scheme in which the
+Perl class name is formed from the concatanation of
+C<Inline::SLang::> and the S-Lang type (so
+C<Inline::SLang::struct> has been renamed to
+C<Inline::SLang::Struct_Type>).
+
+The classes are also more uniform in that they have a
+number of common functions and, where possible, the
+method names are similar to S-Lang functions with the
+same functionality.
+
+=item *
+
+Ref_Type variables are now supported (scalars only)
+via the C<Inline::SLang::Ref_Type> class. Unfortunately
+this requires use of function/types that are not part
+of the public interface of the S-Lang library.
+
+=item *
+
+The BIND_NS option only works for v1.4.3 and higher of S-Lang.
+The option has been enhanced to allow namespace "renaming"
+and the use of "All" to specify all known namespaces (this
+only works for v1.4.7 and higher of S-Lang). The only valid
+string options are now "Global(=...)" and "All".
+
+=item *
+
+The BIND_SLFUNCS option has been added to allow you to use
+slected S-Lang intrinsic functions directly from Perl (i.e. without
+having to write a S-Lang wrapper function around it). To
+help avoid nameclashes you can chose your own name for
+the function in Perl.
+
+=item *
+
+Documentation on S-Lang specific configuration options
+has been moved to L<Inline::SLang::Config>.
+
+=back
 
 =item v0.04 Fri Mar  7 00:14:47 EST 2003
 

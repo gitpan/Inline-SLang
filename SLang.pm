@@ -25,7 +25,7 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK);
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 @ISA = qw(Inline DynaLoader Exporter);
 @EXPORT_OK =
     qw(
@@ -57,7 +57,12 @@ sub usage_validate ($) {
 }
 
 sub usage_config_bind_ns {
-  "Invalid value for Inline::SLang option 'BIND_NS'; must be string or array reference";
+  "Invalid value for Inline::SLang option 'BIND_NS';\n" .
+    "It must be a string (either \"Global\" or \"All\") or an array reference";
+}
+
+sub usage_config_bind_slfuncs {
+  "The Inline::SLang option 'BIND_SLFUNCS' must be given an array reference";
 }
 
 sub validate {
@@ -68,6 +73,7 @@ sub validate {
   # do I need to add support for the FILTERS key in the loop below?
   $o->{ILSM}{FILTERS} ||= [];
   $o->{ILSM}{bind_ns} = [ "Global" ];
+  $o->{ILSM}{bind_slfuncs} = [];
 
   # loop through the options    
   my $flag = 0;
@@ -80,13 +86,26 @@ sub validate {
     #
     if ( $key eq "BIND_NS" ) {
       my $type = ref($value);
-      croak usage_config_bind_funcs()
-	unless $type eq "" or $type eq "ARRAY";
-
-      $value = [ $value ] if $type eq "";
+      # note: we could make a better stab of ensuring the package name
+      # in the 'Global' regexp is correct Perl
+      #
+      croak usage_config_bind_ns()
+	unless ($type eq "" and
+		($value =~ m/^Global(=[A-Za-z_0-9]+)?$/ or
+		 $value eq "All"))
+	or $type eq "ARRAY";
+      # we let build() worry about the actual contents
       $o->{ILSM}{bind_ns} = $value;
       next;
-    }
+    } # BIND_NS
+
+    if ( $key eq "BIND_SLFUNCS" ) {
+      my $type = ref($value);
+      croak usage_config_bind_slfuncs()
+	unless $type eq "ARRAY";
+      $o->{ILSM}{bind_slfuncs} = $value;
+      next;
+    } # BIND_SLFUNCS
 
     print usage_validate $key;
     $flag = 1;
@@ -117,15 +136,75 @@ sub build {
     # Filter the code
     $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
 
-    my @ns = @{ $o->{ILSM}{bind_ns} };
+    # bind_ns = [ $ns1, ..., $nsN ]
+    # where $ns1 is either the name of the S-Lang
+    # namespace (eg "Global") or "Global=foo", 
+    # which means to bind S-Lang namespace Global
+    # to Perl package foo
+    # (not sure if this is really necessary, but it's easy
+    #  to implement ;)
+    #
+    # the keys of %ns_map are the S-Lang namespace names,
+    # and the value the Perl package name (they're going to
+    # be the same for virtually all cases)
+    #
+    # It's complicated by allowing bind_ns = "All", which says
+    # to bind all known namespaces. We only allow this for
+    # S-Lang librarise >= 1.4.7 (since we use the _get_namespaces()
+    # function). Use with an earlier S-Lang library causes the
+    # code to die (could try and reset to ["Global"] in this
+    # case but I think that's going to cause confusion/errors.
+    #
+    # It's also complicated by allowing the user to specify
+    # S-Lang intrinsic functions that are to be bound
+    # (bind_slfuncs)
+    #
+    # First off we need to check for bind_ns eq "All" or "Global"
+    my $bind_ns = $o->{ILSM}{bind_ns};
+    my $bind_all_ns = 0;
+    if ( ref($bind_ns) eq "" ) {
+      if ( $bind_ns =~ "^Global" ) { $bind_ns = [ $bind_ns ]; }
+      else {
+	# if "All" then we have to list all the namespaces,
+	# but this is only avalable in >= 1.4.7
+	#
+	my $ver = sl_eval("_slang_version");
+	die "You need at least v1.4.7 of the S-Lang library to use the BIND_NS = \"All\" option." 
+	  if $ver < 10407;
+
+	# we will need to append to this after running sl_eval()
+	$bind_ns = @{ sl_eval( "_get_namespaces();" ) || [] };
+	$bind_all_ns = 1;
+      }			  
+    }
+    my %ns_map = map {
+      my ( $slns, $plns ) = split(/=/,$_,2);
+      $plns ||= $slns;
+      ( $slns, $plns );
+    } @{ $bind_ns };
+
+    # parse the bind_slfuncs information
+    my %intrin_funs = map {
+      my ( $slfn, $plfn ) = split(/=/,$_,2);
+      $plfn ||= $slfn;
+      ( $slfn, $plfn );
+    } @{ $o->{ILSM}{bind_slfuncs} };
 
     # What does the current namespace look like before evaluating
     # the user-supplied code?
     # - we only need to worry about those namespaces listed
     #   in the bind_ns array
     #
+    # Perhaps we should hack the Perl namespace of Global to main
+    # (if it hasn't been explicitly specified)
+    #
     my %ns_orig = ();
-    foreach my $ns ( @ns ) {
+    foreach my $ns ( keys %ns_map ) {
+      # we do not exclude any values in %intrin_funs since
+      # they are processed slightly differently from other
+      # functions (they can be renamed, but not placed into
+      # a different namespace)
+      #
       $ns_orig{$ns} = 
       {
 	map { ($_,1); } @{ sl_eval( '_apropos("' . $ns . '","",3);' ) || [] }
@@ -136,9 +215,20 @@ sub build {
     # we ignore any output from the eval'd code
     sl_eval( $o->{ILSM}{code} );
 
+    # update the list of namespaces if BIND_NS was set to "All"
+    #
+    if ( $bind_all_ns ) {
+      foreach my $ns ( @{ sl_eval( "_get_namespaces();" ) || [] } ) {
+	unless ( exists $ns_map{$ns} ) {
+	  $ns_map{$ns} = $ns;
+	  $ns_orig{$ns} = {};
+	}
+      }
+    }
+
     # now find out what we've got available
     # - we use the bind_ns array to tell us what namespaces
-    #   to bind to ("" means the 'Global' namespace)
+    #   to bind to
     #
     # - we bind all functions that are NOT S-Lang intrinsics:
     #   more specifically, we only add those functions that
@@ -146,7 +236,7 @@ sub build {
     #   above
     #
     my %namespaces = ();
-    foreach my $ns ( @ns ) {
+    foreach my $ns ( keys %ns_map ) {
       my $funclist = sl_eval( '_apropos("' . $ns . '","",3);' );
 
       # remove those we already know about
@@ -161,6 +251,20 @@ sub build {
       $namespaces{$ns} = \@bind;
     }
 
+    # now bind any S-Lang intrinsics
+    # note that they get bound into whatever package the
+    # Global namespace is mapped to
+    #
+    my $href = $ns_orig{Global};
+    my $aref = $namespaces{Global};
+    while ( my ( $slfn, $plfn ) = each %intrin_funs ) {
+      if ( exists $$href{$slfn} ) {
+	push @{$aref}, [$slfn,$plfn];
+      } else {
+	warn "Requested S-Lang intrinsic function $slfn is not found in the Global namespace";
+      }
+    }
+
     # Cache the results
     #
     my $odir = "$o->{API}{install_lib}/auto/$o->{API}{modpname}";
@@ -168,6 +272,7 @@ sub build {
 
     my $parse_info = Inline::denter->new->indent(
 	*namespaces => \%namespaces,
+        *ns_map     => \%ns_map,
 	*code       => $o->{ILSM}{code},
     );
 
@@ -178,6 +283,7 @@ sub build {
     $fh->close();
 
     $o->{ILSM}{namespaces} = \%namespaces;
+    $o->{ILSM}{ns_map} = \%ns_map;
     $o->{ILSM}{built}++;
 
 } # sub: build()
@@ -211,6 +317,7 @@ sub load {
       
       my %sldat = Inline::denter->new->undent($sldat);
       $o->{ILSM}{namespaces} = $sldat{namespaces};
+      $o->{ILSM}{ns_map}     = $sldat{ns_map};
       $o->{ILSM}{code}       = $sldat{code};
 
       # Run it
@@ -218,20 +325,29 @@ sub load {
     }
 
     # Bind the functions
-    # ns=Global goes into the package namespace,
-    # otherwise goes into package::ns namespace
-    # - this may not be a good idea and perhaps should
-    #   be configurable -- eg
-    #     BIND_NS => [ "foo=>bar", "Global" ],
-    #   or
-    #     BIND_NS => [ ["foo","bar"], "Global" ] ],
-    #   to say stick S-Lang ns foo into perl's bar
+    # The functions in S-Lang namespace foo
+    # are placed into the Perl package bar
+    # where foo = $o->{ILSM}{ns_map}{foo}
     #
-    foreach my $ns ( keys %{ $o->{ILSM}{namespaces} } ) {
+    # In most cases foo == bar
+    # We hack Global so that it appears in
+    # main ***UNLESS** the user has specified
+    # a name for the Perl package (ie they
+    # had BIND_NS => [ ..., "Global=foo", ... ]
+    # 
+    while ( my ( $slns, $plns ) = each %{ $o->{ILSM}{ns_map} } ) { 
       my $qualname = "$o->{API}{pkg}::";
-      $qualname .= "${ns}::" unless $ns eq "Global";
-      foreach my $fn ( @{ $o->{ILSM}{namespaces}{$ns} || [] } ) {
-	sl_bind_function( "$qualname$fn", $ns, $fn );
+      $qualname .= "${plns}::" unless 
+	$slns eq "Global" && $slns eq $plns;
+      foreach my $fn ( @{ $o->{ILSM}{namespaces}{$slns} || [] } ) {
+	# if it's an array reference then we have
+	# [ $slang_name, $perl_name ]
+	# This is currently only for S-Lang intrinsic functions
+	#
+	my ( $slfn, $plfn );
+	if ( ref($fn) eq "ARRAY" ) { $slfn = $$fn[0]; $plfn = $$fn[1]; }
+	else                       { $slfn = $fn;     $plfn = $fn; }
+	sl_bind_function( "$qualname$plfn", $slns, $slfn );
       }
     }
 
@@ -294,76 +410,159 @@ sub info {
     $info .= "\tcompiled against " . _sl_version() . "\n";
     $info .= "\tusing            $ver\n\n";
 
-    # always print this header, whether we've bound anything or not
-    $info .= "The following S-Lang functions have been bound to Perl:\n\n";
+    $info .= "The following S-Lang namespaces have been bound to Perl:\n\n";
+    while ( my ( $slns, $plns ) = each %{ $o->{ILSM}{ns_map} } ) {
 
-    foreach my $ns ( keys %{ $o->{ILSM}{namespaces} } ) {
-      my $aref = $o->{ILSM}{namespaces}{$ns} || [];
-      $info .= sprintf( "Namespace $ns contains %d bound function(s).\n",
-			1+$#$aref );
-      foreach my $fn ( @$aref ) { $info .= "\t$fn()\n"; }
+      $plns = "main" if $slns eq "Global" and $slns eq $plns;
+      my $aref = $o->{ILSM}{namespaces}{$slns} || [];
+      my $nfn  = 1 + $#$aref;
+      if ( $nfn == 1 ) {
+	$info .= sprintf( "  1 function from namespace %s is bound to package %s\n",
+			  $slns, $plns );
+      } else {
+	$info .= sprintf( "  %d functions from namespace %s are bound to package %s\n",
+			  1+$#$aref, $slns, $plns );
+      }
+      foreach my $fn ( @$aref ) {
+	if ( ref($fn) eq "ARRAY" ) {
+	  $info .= "\t$$fn[0]() -> $$fn[1]()\n";
+	} else {
+	  $info .= "\t$fn()\n";
+	}
+      }
       $info .= "\n";
     }
-
     return $info;
 
 } # sub: info()
 
 #==============================================================================
-# S-Lang datatypes as perl objects
+# S-Lang datatypes as perl objects, all based on the Inline::SLang::_Type 
+# class, which doesn't actually provide that much functionality, but let's 
+# see how this approach pans out
 #
-# The objects are:
-#    Inline::SLang::datatype
-#    Inline::SLang::struct
+# Inline::SLang::_Type
+#
+# - base class of all the S-Lang types that aren't convertable to a 
+#   common Perl type/object
+# - essentially all this does (at the moment) is ensure that every class 
+#   has 3 methods:
+#     an overloaded "print/stringify" function
+#     typeof()
+#     is_struct_type() [only useful when we support type-deffed structs]
+#
+#     _is_mmt() - internal function, may not be needed
+#
+#   Might want to add new() to this list (and have it croak)?
+#
+# - This is an experiment and may disappear as quickly as it
+#   appeared
+#==============================================================================
+
+package Inline::SLang::_Type;
+
+# returns the name of the object w/out the leading 'Inline::SLang' text
+sub typeof {
+  my $self  = shift;
+  my $class = ref($self) || $self;
+  return substr($class,15);
+}
+
+# pretty printer, which just calls typeof
+# [would be quicker to include the typeof code directly]
+#
+use overload ( "\"\"" => \&Inline::SLang::_Type::stringify );
+sub stringify { return $_[0]->typeof(); }
+
+# for internal use only - may not be needed
+sub _is_mmt { 0; }
+
+# only going to be useful if we create objects for
+# type-deffed structures
+#
+sub is_struct_type { 0; }
+
+#==============================================================================
+# Inline::SLang::DataType_Type
+#
+# - the type is returned as a string (which is the output of
+#   'typeof(foo);' for the S-Lang variable foo)
+# - the string is blessed into the Inline::SLang::DataType_Type object
 #
 #==============================================================================
 
-package Inline::SLang::datatype;
+package Inline::SLang::DataType_Type;
 
-# Datatype_Type
-# - the type is returned as a string (which is the output of
-#   'typeof(foo);' for the S-Lang variable foo)
-# - the string is blessed into the Inline::SLang::datatype object
-#
+no strict; # stupid way to get package-scoped global
+@ISA = ( "Inline::SLang::_Type" );
+use strict;
 
 # currently we just take the string and bless it into this
 # class. So, there's no error checking.
 #
 # - perhaps we should call S-Lang to do this
 #
-sub new () {
+sub new {
     my $this  = shift;
     my $class = ref($this) || $this;
-
-    # "make" the object
-    my $name = shift || "";
-    my $self = \$name;
-    bless $self, $class;
-    return $self;
+    my $self = shift || "";
+    return bless \$self, $class;
 } # sub: new()
 
-# pretty printer
-use overload ( "\"\"" => \&Inline::SLang::datatype::stringify );
+# over-ride the base 'stringify' method
+# since we actually want to print out the actual datatype,
+# and not that this is a DataType_Type object
+#
+use overload ( "\"\"" => \&Inline::SLang::DataType_Type::stringify );
 sub stringify { return ${$_[0]}; }
 
 #==============================================================================
-# Inline::SLang::struct
+# Inline::SLang::Struct_Type
+#
+#  NOTE: Should typedef-fed structures be subclasses of this class
+#   so 'typedef struct { foo, bar } FooBar_Struct;' would create an
+#   object of class Inline::SLang::Struct_Type::FooBar_Struct ?
+#   OR Inline::SLang::FooBar_Struct ?
+#  my current preference is the latter
+#
+# Methods - based on those provided by S-Lang for structures:
+#   new()
+#   is_struct_type() - actually redefines the base class method
+#   get_field_names()
+#   get_field() - extended to allow multiple fields
+#   set_field() - extended to allow multiple fields
+#
+# To do:
+#   set_fields() - need to think how interacts with set_field() extension
+#   _push_field_values()
+#
+#   either copy() or dup() -- including Mike Nobles's "field-slicing"
+#     idea, ie $self->copy("-foo"); removes foo
+#
 #==============================================================================
 
-package Inline::SLang::struct;
+package Inline::SLang::Struct_Type;
+
+no strict; # stupid way to get package-scoped global
+@ISA = ( "Inline::SLang::_Type" );
+use strict;
+
+use Carp;
 
 # note:
-#   tThere are private methods which are only meant to be used by
+#   There are private methods which are only meant to be used by
 #   this module when converting between Perl and S-Lang datatypes.
 #   These begin with a '_' character.
 #   There's no guarantee that they will remain the same/exist in
 #   other versions of the module, so don't use ;)
 #
 
-use Carp;
+# only going to be useful if we create objects for
+# type-deffed structures
+#
+sub is_struct_type { 1; }
 
 # Struct_Type
-# - let's see how this works
 # - field names stored as an array
 # - data stored as an associative array
 #
@@ -416,24 +615,27 @@ sub new {
 } # sub: new()
 
 # return an array reference of the field names
+# (matches the S-Lang name w/out the 'struct_')
+#
 # - note: we return a reference to a copy of the array
 #         rather than to the array itself
 #   well, that's what I want, but I'm not sure I'm actually doing it...
 #
-# perhaps this should match the name of the corresponding S-Lang function?
-#
-sub fields {
+sub get_field_names {
     my $self = shift;
     return [ @{ $$self{fields} } ];
-} # sub: fields()
+}
 
-# access the field data
-#   $val  = $obj->get("foo");
-#   @vals = $obj->get("foo","bar");
+# read the field data - the functionality is an extension of that
+# of S-Lang's get_struct_field() since we allow multiple
+# values to be queried at once:
+#
+#   $val  = $obj->get_field("foo");
+#   @vals = $obj->get_field("foo","bar");
 #
 # if the given field name doesn't exist then we die
 #
-sub get {
+sub get_field {
     my $self = shift;
     my @ret;
     foreach my $field ( @_ ) {
@@ -444,15 +646,21 @@ sub get {
 	}
     }
     return wantarray ? @ret : $ret[0];
-} # sub: get()
+} # sub: get_field()
 
-# set the field data
-#   $obj->set( $field1, $val1, $field2, $val2, ... );
+# set the field data - the functionality is an extension of that
+# of S-Lang's set_struct_field() since we allow multiple
+# values to be set at once:
 #
-# sets the given field(s) to the supplied value
+#   $obj->set_field( $field1, $val1, $field2, $val2, ... );
+#
 # if the field doesn't exist then we die
 #
-sub set {
+# NOTE:
+#   may be too confusing with set_fields() [which isn't
+#   implemented yet]
+#
+sub set_field {
     my $self = shift;
     my %hash = @_;
     while ( my ( $field, $value ) = each %hash ) {
@@ -462,13 +670,16 @@ sub set {
 	    croak( "The " . ref($self) . " object does not contain the field \"$field\"\n" );
 	}
     }
-} # sub: set()
+} # sub: set_field()
 
-# pretty printer - act a bit like print
-use overload ( "\"\"" => \&Inline::SLang::struct::stringify );
+# over-ride the default object "stringification"
+# - include structure type for when we support
+#   typedef-fed structures
+#
+use overload ( "\"\"" => \&Inline::SLang::Struct_Type::stringify );
 sub stringify {
     my $self = shift;
-    my $string = "";
+    my $string = "Structure Type: " . $self->typeof() . "\n";
     foreach my $field ( @{ $$self{fields} } ) {
 	$string .= "\t$field\t= $$self{data}{$field}\n";
     }
@@ -487,8 +698,38 @@ sub _define_struct {
     return "\$1 = struct { " . join( ', ', @{ $$self{fields} } ) . " };";
 } # sub: _define_struct()
 
+
+#==============================================================================
+# Inline::SLang::Ref_Type
+#
+#==============================================================================
+
+package Inline::SLang::Ref_Type;
+
+no strict; # stupid way to get package-scoped global
+@ISA = ( "Inline::SLang::_Type" );
+use strict;
+
+use Carp; # for croak()
+
+## do we need a new() method? I think it would be awkward
+## to do from perl.
+##
+#sub new {
+#    my $this  = shift;
+#    my $class = ref($this) || $this;
+#
+#    croak "Error: unable to create an $class object (for now?)\n";
+#
+#    # create the object
+#    my $self = {};
+#    bless $self, $class;
+#    return $self;
+#} # sub: new()
+
+sub DESTROY { Inline::SLang::_sl_free_ref( ${ $_[0] } ); }
+
+#==============================================================================
+
+# End
 1;
-
-
-
-

@@ -44,8 +44,13 @@ INSTALLATION
 
 This module probably requires Inline.pm version 0.42 or higher to be 
 installed. In addition, you need S-Lang library v1.4.0 or greater installed;
-the development of this module is being done mainly against 1.4.4 - as
-distributed with CIAO 2.3 - and 1.4.7 (will upgrade to 1.4.8 soon).
+however, the the development of this module is done mainly against 1.4.4 and
+1.4.8, so there is little support for 1.4.3 and earlier (i.e. I am more
+likely to drop support rather than try and fix/work around issues).
+
+If you want to use the BIND_NS option then I suggest you upgrade to at 
+least v1.4.3, and with v1.4.7 you gain extra functionality (the "All"
+option).
 
 Currently I assume that S-Lang has been compiled with support for
 floating-point and complex numbers.
@@ -56,14 +61,14 @@ to download it from CPAN (http://search.cpan.org/).
 
 To install Inline::SLang do this:
 
-$ perl Makefile.PL
-$ make
-$ make test
-$ make install
+  $ perl Makefile.PL
+  $ make
+  $ make test
+  $ make install
 
 For configuration options, enter
 
-$ perl Makefile.PL -help
+  $ perl Makefile.PL -help
 
 The main options of interest are -slangdir or -slanglib/inc to specify
 the location of the library and its include file. The program looks in

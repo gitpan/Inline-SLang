@@ -4,11 +4,17 @@
 # . this is mainly testing the stack-handling since the 
 #   tests of the individual datatypes are done in
 #   01scalars2perl.t and 01scalars2slang.t
+# . also tests references (since need to test both conversions
+#   at once [or at least it makes things easier]
+#
+# Really this should be run after the individual scalar
+# tests (ie 01scalars2*.t) since the tests assume that
+# the basic conversions work
 #
 
 use strict;
 
-use Test::More tests => 11;
+use Test::More tests => 27;
 
 use Data::Dumper;
 
@@ -26,7 +32,7 @@ sub approx ($$$) {
 
 use Inline 'SLang';
 
-my ( $ret1, $ret2, @ret );
+my ( $ret1, $ret2, $ret3, @ret );
 
 ## variable args
 
@@ -55,16 +61,30 @@ is( $ret1, "a b", "a + ' ' + b = 'a b'" );
 $ret1 = concatall( " ", "2 " );
 is( $ret1, " 2 ", "' ' + '2 ' = ' 2 '" );
 
-## Null values
+# References
+# - note: checking both 2 perl and 2 slang
+#
+my %_hacked = ( "normal" => -23.2, "static" => 4, "private" => undef );
+foreach my $linkage ( qw( normal static private ) ) {
+  $ret1 = retref($linkage);
+  isa_ok( $ret1, "Inline::SLang::Ref_Type" );
+  isa_ok( $ret1, "Inline::SLang::_Type" );
+  isa_ok( $ret1, "Inline::SLang::Ref_Type" );
+  is( unref($ret1), "a $linkage string", "  can deref $linkage linkage" );
+  hackref($linkage);
+  is( unref($ret1), $_hacked{$linkage}, "  and can change" );
+}
 
-$ret1 = sendnull(undef);
-is( $ret1, 1, 'undef (perl) converted to NULL (S-Lang)' );
-
-$ret1 = sendnull('foo');
-is( $ret1, 0, '"foo" != NULL' );
+# stack tests
+$ret1 = undef;
+( $ret1, $ret2, $ret3 ) = retref_multi();
+print "Stack test: ret1=[$ret1] ret2=[$ret2] ret3=[$ret3]\n";
+ok( $ret1 == 12 && $ret3 eq "foo bar",
+  "Ref_Type handling okay with the stack" );
+isa_ok( $ret2, "Inline::SLang::Ref_Type" );
+is( unref($ret2), $_hacked{"normal"}, "  de-reffed correctly" );
 
 __END__
-
 __SLang__
 
 %% check the stack (variable args)
@@ -96,5 +116,23 @@ define concatall () {
   return str;
 }
 
-% NULL value
-define sendnull(x) { return x==NULL; }
+% references
+variable _a_normal_string          = "a normal string";
+static  variable _a_static_string  = "a static string";
+private variable _a_private_string = "a private string";
+define retref(id) {
+  switch (id)
+  { case "normal":  return &_a_normal_string; }
+  { case "static":  return &_a_static_string; }
+  { case "private": return &_a_private_string; }
+}
+define hackref(id) {
+  switch (id)
+  { case "normal":  _a_normal_string = -23.2; }
+  { case "static":  _a_static_string = 4; }
+  { case "private": _a_private_string = NULL; }
+}
+define unref(x) { return @x; }
+
+define retref_multi() { return ( 12, &_a_normal_string, "foo bar" ); }
+

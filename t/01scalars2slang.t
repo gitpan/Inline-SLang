@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 12;
+use Test::More tests => 16;
 
 use Data::Dumper;
 
@@ -48,14 +48,28 @@ $ret1 = Math::Complex->make(3,-4);
 ok( is_complex($ret1), "perl complex translated to S-Lang complex" );
 ok( check_complex($ret1), "  and the value is okay" );
 
-## datatype
+## Null values
 
-$ret1 = Inline::SLang::datatype->new( "Int_Type" );
-isa_ok( $ret1, "Inline::SLang::datatype" );
-is( "$ret1", "Int_Type", "Able to 'stringify' the Inline::SLang::datatype object" );
+$ret1 = sendnull(undef);
+is( $ret1, 1, 'undef (perl) converted to NULL (S-Lang)' );
+
+$ret1 = sendnull('foo');
+is( $ret1, 0, '"foo" != NULL' );
+
+## datatypes
+
+$ret1 = Inline::SLang::DataType_Type->new( "Int_Type" );
+isa_ok( $ret1, "Inline::SLang::DataType_Type" );
+isa_ok( $ret1, "Inline::SLang::_Type" );
+ok( !$ret1->is_struct_type, "and we are not a structure" );
+
+is( "$ret1", "Int_Type",
+	"Able to 'stringify' the Inline::SLang::DataType_Type object" );
 
 foreach my $type ( qw( DataType_Type UChar_Type Any_Type Assoc_Type ) ) {
-    $ret1 = is_datatype( $type, Inline::SLang::datatype->new( $type ) );
+    $ret1 = is_datatype(
+	$type,
+	Inline::SLang::DataType_Type->new( $type ) );
     ok( $ret1, "Recognises as a datatype: $type" );
 }
 
@@ -99,4 +113,7 @@ define concatall () {
   }
   return str;
 }
+
+% NULL value
+define sendnull(x) { return x==NULL; }
 

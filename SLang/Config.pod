@@ -1,0 +1,225 @@
+=head1 NAME
+
+Inline::SLang::Config - How to configure Inline::SLang
+
+=head1 DESCRIPTION
+
+The L<Inline|Inline> documentation describes how you can
+configure the Inline-specific options. Please review that
+document if you are unfamiliar with the way Inline
+works (in particular the section on "Configuration
+Options"). This document describes the options that are 
+available to configure the S-Lang interface.
+
+ ***
+ *** One possible option would be to allow the S-Lang code
+ *** to be byte-compiled, which may provide a speed-improvement
+ *** when loading. However, the speed improvement may not be
+ *** worth the extra effort/checks necessary in the code.
+ ***
+
+=head2 BIND_NS - what namespaces should be searched?
+
+Note that this option does not work correctly in versions
+1.4.2 and earlier of the S-Lang library; I believe this
+is due to issues with the namespace support that were
+fixed in version 1.4.3 but can not be certain of this.
+
+This option - which takes either a string or a reference to
+an array of strings - specifies the S-Lang namespaces which
+are searched for functions to bind to Perl. The accepted
+values are:
+
+=over 2
+
+=item "Global"
+
+Binds functions in the Global namespace only. This is the
+B<default> value.
+
+=item "All"
+
+Binds functions in all the namespaces that are defined at
+the time of compilation. You can not use the namespace
+renaming feature discussed below with this
+option (so "All=foo" does not work).
+
+This option is only available if you compiled against
+version 1.4.7 or I<higher> of the S-Lang library. The
+code dies when an earlier version is used.
+
+=item Array reference
+
+If an array reference is given then it should contain
+the names of the namespaces to search for S-Lang
+functions. In most case you will want to ensure that
+"Global" is contained in the list.
+
+=back
+
+The default behaviour is for 
+functions in the "Global" namespace to be bound
+to the Perl C<main> package (so they can be used without
+any package specifier) while functions in other
+namespaces are placed into the Perl
+package whose name equals that of the S-Lang namespace
+(see below for examples). 
+This can be changed by supplying strings matching "foo=bar",
+which says to bind functions from the C<foo> namespace
+into the Perl package C<bar>. So,
+
+  BIND_NS => [ "Global=foo", "foo" ],
+
+will bind all S-Lang functions into the C<foo> package.
+
+Note that no checks are made for over-writing functions
+when they are bound to Perl. Also, if you are using this
+functionality you should probably be using the 2-argument
+form of S-Lang's C<import> and C<evalfile> commands
+instead.
+
+=over 2
+
+=item Example of using a single namespace:
+
+ use Inline 'SLang' => Config => BIND_NS => "foo";
+ use Inline 'SLang' => <<'EOS1';
+  define fn_in_global(x) { "in global"; }
+  implements( "foo" );
+  define fn_in_foo(x) { "in foo"; }
+ EOS1
+
+ # this works
+ printf "I am in %s\n", foo::fn_in_foo("dummyval");
+
+ # this does not work since fn_in_global is in the
+ # Global namespace which was not given to the
+ # BIND_NS option
+ printf "I am in %s\n", fn_in_global("dummyval");
+
+=item Example of using multiple namespaces:
+
+ use Inline 'SLang' => Config => BIND_NS => [ "Global", "foo" ];
+ use Inline 'SLang' => <<'EOS1';
+  define fn_in_global(x) { "in global"; }
+  implements( "foo" );
+  define fn_in_foo(x) { "in foo"; }
+ EOS1
+
+ # this works
+ printf "I am in %s\n", foo::fn_in_foo("dummyval");
+
+ # as does this
+ printf "I am in %s\n", fn_in_global("dummyval");
+
+=item Example of renaming a namespace:
+
+ use Inline 'SLang' => Config => BIND_NS => [ "Global", "foo=bar" ];
+ use Inline 'SLang' => <<'EOS1';
+  define fn_in_global(x) { "in global"; }
+  implements( "foo" );
+  define fn_in_foo(x) { "in foo"; }
+ EOS1
+
+ # this works
+ printf "I am in %s\n", bar::fn_in_foo("dummyval");
+
+ # as does this
+ printf "I am in %s\n", fn_in_global("dummyval");
+
+=item Example of using all namespaces:
+
+ use Inline 'SLang' => Config => BIND_NS => "All";
+ use Inline 'SLang' => <<'EOS1';
+  define fn_in_global(x) { "in global"; }
+  implements( "foo" );
+  define fn_in_foo(x) { "in foo"; }
+ EOS1
+
+ # this works
+ printf "I am in %s\n", foo::fn_in_foo("dummyval");
+
+ # as does this
+ printf "I am in %s\n", fn_in_global("dummyval");
+
+=back
+
+=head2 BIND_SLFUNCS - which S-Lang intrinsic functions to bind?
+
+This option is used to give a list of S-Lang I<intrinsic>
+functions which are to be bound to Perl. The default value
+is B<[]>, i.e. no functions.
+
+Note that there are no checks on whether it makes sense
+to bind the specified function, or whether it conflicts
+with an existing Perl function.
+
+=over 2
+
+=item Example of binding an intrinsic command into main:
+
+ use Inline 'SLang' => Config => BIND_SLFUNCS => ["typeof"];
+ use Inline 'SLang' => "define get_typeof(x) { typeof(x); }";
+
+ # both return
+ #  The S-Lang type of 'foo' is String_Type
+ printf "The S-Lang type of 'foo' is %s\n", get_typeof("foo");
+ printf "The S-Lang type of 'foo' is %s\n", typeof("foo");
+
+=item Example of binding an intrinsic command into the foo package:
+
+ use Inline 'SLang' => Config =>
+   BIND_NS => "Global=foo",
+   BIND_SLFUNCS => ["typeof"];
+ use Inline 'SLang' => "define pointless() { return NULL; }";
+
+ # This also prints
+ #  The S-Lang type of 'foo' is String_Type
+ printf "The S-Lang type of 'foo' is %s\n", foo::typeof("foo");
+
+=back
+
+=head2 What functions and namespaces have been bound to Perl?
+
+The C<info> option of L<Inline|Inline> can be useful to see
+what has (and has not) been bound to Perl. As an example
+try:
+
+  perl -MInline=info <<FOO
+  use Inline SLang;
+  # let's not actually do anything
+  __END__
+  __SLang__
+  variable foobar = "a string";
+  define foo()  { return foobar; }
+  define bar(x) { foobar = x; }
+  FOO
+
+The relevant part of the output (as of version 0.05 of 
+C<Inline::SLang>) is:
+
+  Configuration details
+  ---------------------
+
+  Version of S-Lang library:
+          compiled against 1.4.8
+          using            1.4.8
+
+  The following S-Lang namespaces have been bound to Perl:
+
+    2 functions from namespace Global are bound to package main
+          bar()
+          foo()
+
+Any S-Lang intrinsic functions bound to Perl are indicated using
+the format C<S-Lang name() -E<gt> Perl name()>, even when the
+Perl and S-Lang names match (this may change).
+
+=head1 SEE ALSO
+
+L<Inline::SLang>, L<Inline>
+
+=head1 AUTHOR, COPYRIGHT, LICENSE, and WARRANTY
+
+See the L<Inline::SLang|Inline::SLang> documentation.
+

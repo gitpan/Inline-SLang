@@ -51,26 +51,9 @@ since it provides variables ("piddles") which retain
 type information and are optimised for numeric work.
 Support for PDL is planned (once the initial kinks of the
 perl interface have been worked out)
-but currently not implemented (as of v0.03). Note that this
+but currently not implemented (as of v0.05). Note that this
 will not remove the need for a number of object
 types, such as C<Inline::SLang::struct>.
-
-=head2 Handling numeric arrays
-
-Currently S-Lang arrays are converted to Perl array references
-(as discussed below). This is fine for strings (and is the
-obvious representation), and does allow easy access to the
-data. However, for numeric arrays it's not the most
-efficient and presents issues when converting Perl to S-Lang
-data [ie one would have to loop through the entire array to
-work out what S-Lang datatype and dimensionality/sizes to use].
-Perhaps we should use a reference to a scalar as done
-in L<Astro::FITS::CFITSIO|/Astro::FITS::CFITSIO>, but this 
-approach has it's own issues (how do we find out the 
-size of the array?).
-
-I am tempted to use array references and then force users
-to use L<PDL|/PDL> if they want efficiency.
 
 =head2 Supported Perl Data Types
 
@@ -82,12 +65,14 @@ The following data types may be passed from Perl into S-Lang. Any
 unrecognized type is replaced with C<undef> during translation.
 
 I am leaning towards returing some sort of opaque reference
-for unrecognized types - eg C<Inline::slang::unknown> - 
+for unrecognized types - eg C<Inline::SLang::unknown> - 
 so that the perl code won't be able
 to access them but will be able to pass them along to other
 S-Lang routines which can use them. This is necessary to
 allow support of modules and/or packages which may define
-new types.
+new types. We may be able to make the class name more
+meaningful (i.e. replace C<unknown> by the S-Lang type
+of the variable). Or we may not.
 
 =over 4
 
@@ -125,17 +110,23 @@ Converted to S-Lang C<String_Type>.
 
 =item *
 
-Inline::SLang::datatype
+Inline::SLang::DataType_Type
 
 Converted to S-Lang C<DataType_Type>.
 
 =item *
 
-Inline::SLang::struct
+Inline::SLang::Struct_Type
 
 Converted to S-Lang C<Struct_Type>.
 
 LEAKS MEMORY.
+
+=item *
+
+Inline::SLang::Ref_Type
+
+Converted to S-Lang C<Ref_Type>.
 
 =item *
 
@@ -154,6 +145,10 @@ Hash Reference
 *** NOT SUPPORTED ***
 
 This should be converted to a S-Lang C<Assoc_Type> object.
+Since we don't know the types of all the elements in
+the Perl hash array, it's simplest to always create 
+the values as C<Any_Type> variables. That's if I 
+actually knew how to do that...
 
 =item *
 
@@ -166,7 +161,8 @@ all others
 =head2 Supported S-Lang Data Types
 
 The following S-Lang types may be returned from a S-Lang function to
-Perl. Unrecognized types currently cause the code to die.
+Perl. Unrecognized types currently cause the code to die
+(or perhaps to return undef; I really should check).
 
 =over 4
 
@@ -206,9 +202,17 @@ Converted to a perl string.
 
 DataType_Type
 
-An object of class C<Inline::SLang::datatype> is
-returned. Currently this is a very simple class
-(see below).
+An object of class C<Inline::SLang::DataType_Type> is
+returned.
+See L<below|/"DATATYPE CLASSES"> for further details.
+
+=item *
+
+Ref_Type
+
+An object of class C<Inline::SLang::Ref_Type> is
+returned.
+See L<below|/"DATATYPE CLASSES"> for further details.
 
 =item *
 
@@ -235,9 +239,9 @@ do not currently support C<Any_Type> objects.
 
 Struct_Type
 
-An object of class C<Inline::SLang::struct> is
-returned. See
-L<below|DATATYPE CLASSES> for further details.
+An object of class C<Inline::SLang::Struct_Type> is
+returned.
+See L<below|/"DATATYPE CLASSES"> for further details.
 
 =item *
 
@@ -245,132 +249,292 @@ all others
 
 *** NOT SUPPORTED ***
 
-Will likely use the C,Inline::SLang::unknown> class.
+Will likely use the C<Inline::SLang::unknown> class (or
+at least someting that resembles this idea).
 
 =back
 
 =head1 DATATYPE CLASSES
 
+ ***
+ *** Comments would be welcome on the following approach
+ *** It could be less verbose (particularly the
+ *** Inline::SLang::*** class names), but I think the
+ *** current approach is somewhat logical/easy to follow
+ ***
+
+Objects are used to represent those S-Lang data types for 
+which there is no corresponding Perl data type:
+for complex numbers we use the L<Math::Complex|Math::Complex> 
+module which is distributed with Perl;
+for numeric types we may use piddles (see the documentation 
+for the L<Perl Data Language|PDL>);
+and for other types we use a class specific to
+Inline::SLang.
+
 =head2 Complex numbers
 
 Complex numbers are represented as C<Complex_Type> in 
 S-Lang and as a
-L<Math::Complex|Math::Complex> object in Perl.
+L<Math::Complex|Math::Complex> object in Perl. See the
+L<Math::Complex|Math::Complex> documentation for
+information on how to use this class.
 
-=head2 Datatypes
+=head2 Numeric types as piddles
+
+ ***
+ *** Support for PDL is not yet available (v0.05)
+ ***
+
+The L<Perl Data Language (PDL)|PDL> is a set of perl
+modules designed to provide fast, efficient, numeric
+capabilities in Perl (if you routinely deal with arrays
+of numbers in Perl you should have a look at
+PDL; see http://pdl.perl.org/). 
+
+Currently S-Lang arrays are converted to Perl array references
+(as discussed below). This is fine for strings (and is the
+obvious representation), and does allow easy access to the
+data. However, for numeric arrays it's not the most
+efficient and presents issues when converting Perl to S-Lang
+data [ie one would have to loop through the entire array to
+work out what S-Lang datatype and dimensionality/sizes to use].
+Perhaps we should use a reference to a scalar as done
+in L<Astro::FITS::CFITSIO|Astro::FITS::CFITSIO>, but this 
+approach has it's own issues (how do we find out the 
+size of the array?).
+
+It is likely that a routine will be used to define
+whether S-Lang numeric arrays should be turned into
+piddles or references to perl arrays (following the
+approach of the L<Astro::FITS::CFITSIO|Astro::FITS::CFITSIO>
+module). However, unlike the CFITSIO module, I am likely
+to convert to either a perl array reference or
+a piddle - ie no reference to a character array
+representing the data (ie force users to use piddles if
+they want efficiency).
+
+=head2 Other types
+
+A number of S-Lang types do not map to an obvious Perl
+type. For these types, Inline::SLang creates
+an object of class C<< Inline::SLang::<type> >>,
+where C<< <type> >> is the name of the S-lang datatype
+(i.e. the output of S-Lang's C<typeof> function).
+
+Each class provides a number of methods, as listed below.
+These methods are not exported into the calling packages
+namespace, so they can I<only> be accessed using the
+"object-oriented" form, i.e.
+
+  $obj->foo()
+
+Note that the C<new()> method is not defined for
+some classes, which means you can only create them
+by calling a S-Lang function.
+
+=head3 Common methods
+
+All classes provide the following methods:
+
+=over 4
+
+=item typeof()
+
+Returns a string containing the name of the S-Lang datatype
+of the object (which corresponds to the name of the
+Perl class without the leading C<Inline::SLang::>).
+
+=item stringify()
+
+The "print" method for the objects has been 
+over-loaded to use the C<stringify()> method:
+for most types it will return the datatype name (namely
+the output of the C<typeof()> method), whereas for certain
+classes - such as C<Inline::SLang::Struct_Type> - it will
+print out a formated representation of the data. 
+
+The class descriptions below describe the output format
+if it does not match that of the C<typeof()> method.
+
+=item is_struct_type()
+
+Returns a 1 if the object represents a S-Lang structure,
+and 0 otherwise.
+This is currently rather useless since the only class 
+for which a 1 is returned is C<Inline::SLang::Struct_Type>.
+It has been introduced in the hope that we will be able
+to create objects for "named" structures (ie
+those created via S-Lang's C<typedef> command).
+
+=back
+
+=head2 DataType_Type
 
 S-Lang C<Datatype_Type> values are represented using
-C<Inline::SLang::datatype> objects.
+C<Inline::SLang::DataType_Type> objects.
 
-Currently there are only two methods and the API could
-change based on use/feed-back:
-
-=over 4
-
-=item *
-
-Inline::SLang::datatype->new()
-
-Given a string containing the name of the datatype (eg
-"UChar_Type"), the constructor
-
-=item *
-
-stringify()
-
-Converts the object into a string. In practice you would
-not call this method directly since you can just
-include the variable into a string:
-
-  my $type = Inline::SLang::datatype->new("Any_Type");
-  print("And the type is $type\n");
-
-=back
-
-=head2 Structures
-
-S-Lang C<Struct_Type> objects are represented using
-C<Inline::SLang::struct> objects.
-
-The public (ie usable) methods of this object are
-as described below. Any method names beginning with
-an undersocre character ('_') are to be considered
-private and should not be used, since they are not
-guaranteed to stay the same between versions.
+The class-specific methods are:
 
 =over 4
 
-=item *
+=item new()
 
-Inline::SLang::struct->new( $name1, ..., $namen );
+  $dtype = Inline::SLang::DataType_Type->new($type);
 
-Creates a structure with field names as given in
-the supplied arguments (C<$name1> to C<$namen>).
+The C<new()> method accepts a string (C<$type>) 
+containing the name of the S-Lang datatype (e.g.
+"UChar_Type").
 
-=item *
+=item stringify()
 
-$self->fields()
+The name of the datatype represented by the
+object is returned.
 
-Returns an array reference which contains the names of
-all the fields:
+For instance
 
-  $aref = $self->fields();
-  foreach my $f ( @$aref ) { print "Field: $f\n" }
+  $type = Inline::SLang::DataType_Type->new("Any_Type");
+  print("And the type is '$type'\n");
 
-=item *
+outputs
 
-$self->get( $name, ... );
+  And the type is 'Any_Type'.
 
-Returns the value of the specified fields. These fields do
-not need to be specified in the order they are stored
-in the structure. The routine croak's if a field is requested 
-that does not exist in the structure.
-
-  print "field foo = " . $self->get("foo") . "\n";
-  my @vals = $self->get("a","b","c");
-
-=item *
-
-$self->set( $name1, $value1, $name2, $value2, ... );
-
-Sets the values of the specified values. These fields do
-not need to be specified in the order they are stored
-in the structure. The routine croak's if a field is
-specified that does not exist in the structure.
-
-  $self->set("foo",1);
-  $self->set("foo",1,"goo",23.4);
-
-=item *
-
-stringify
-
-Used when converting the object to a string. The field
-names and values are specified using a format that may 
-change.
-
-  print "$self";
-    a     = 23.4
-    bb    = a string
-
-It doesn't handle things like arrays very well.
+Note that the C<typeof()> method returns the
+string "DataType_Type" and I<not> the value of the
+variable.
 
 =back
+
+=head2 Struct_Type
+
+ ***
+ *** I want to represent structures like
+ ***   typedef struct {...} FooBar_Struct;
+ *** as Inline::SLang::FooBar_Struct objects 
+ *** but I need to think about this/work on it
+ *** first ...
+ ***
+
+S-Lang structures - variables with a type of C<Struct_Type> -
+are represented using
+C<Inline::SLang::Struct_Type> objects.
+
+The methods are similar to the S-Lang versions, although
+C<struct_> has been removed from the names and the get and
+set functions allow multiple fields to be specified in a single
+call. Not all S-Lang functions are available, although
+the functionality of the missing functions should be possible
+with the current interface.
+
+Missing are
+
+  set_struct_fields()
+  _push_struct_field_values()
+
+Need to add
+
+  something like copy() or dup() with "field-slicing" a la
+    dup_struct() in CIAO's varmm module.
+
+The class-specific methods are:
+
+=over 4
+
+=item is_struct_type()
+
+This returns 1.
+
+=item new()
+
+  @fields = ( "foo", "bar", "baz" );
+  $s1 = Inline::SLang::Struct_Type->new(@fields);
+  $s2 = Inline::SLang::Struct_Type->new(\@fields);
+
+Create a S-Lang structure from Perl. The C<new()> method
+accepts a list of field names using I<either> an
+array reference or as an actual list. The order of
+the array determines the order of the fields in the
+structure.
+
+It is I<not> possible to set the values of the fields
+with this method (at least not for now; perhaps
+we should allow a hash reference to be supplied
+but then how do we define the order of the
+fields?).
+
+=item get_field_names()
+
+ @names = $s1->get_field_names();
+
+Returns, as an array, the names of the fields contained
+in the structure. Note that, unlike S-Lang's
+C<get_struct_field_names()>, it does not return an
+array reference
+
+=item get_field()
+
+ $val  = $s1->get_field( "bar" );
+ @vals = $s1->get_field( "foo", "baz" );
+
+Returns the value of the specified field(s).
+If given more than one field name then the values
+are returned as an array.
+
+The routine dies if given a field name that
+does not exist in the structure.
+
+=item set_field()
+
+ $s1->set_field( "bar", 1 );
+ $s1->set_field( foo => 23, baz => "a string" );
+
+Sets the supplied to the supplied values. The argument list
+is interpreted as pairs of "field name", "new value";
+as shown above the C<< => >> separator can be used to
+improve the readability of your code.
+
+The routine dies if given a field name that
+does not exist in the structure.
+
+=item stringify()
+
+The structure type and contents are output. The output
+is currently very crude, and only really works if the
+fields contain scalars. 
+
+  @f = ( "one", "two", "three" );
+  $s = Inline::SLang::Struct_Type->new(@f);
+  $s->set_field("one",1,"two",2,"three",3);
+  print "$s\n"; 
+
+outputs
+
+  Structure Type: Struct_Type
+          one     = 1
+          two     = 2
+          three   = 3
+
+=back
+
+=head2 Ref_Type
+
+S-Lang C<Ref_Type> values are represented using
+C<Inline::SLang::Ref_Type> objects. Note that these
+objects can I<only> be created from S-Lang
+(i.e. there is no C<new()> method).
+In fact, there is little that you can do with these
+objects in Perl; if you want to access/change the
+value referred to then you need to pass the object
+back to S-Lang.
+
+There are no class-specific methods.
 
 =head1 SEE ALSO
 
-L<Inline::SLang>, L<Math::Complex>
+L<Inline::SLang>, L<Math::Complex>, L<PDL>
 
-=head1 AUTHOR
+=head1 AUTHOR, COPYRIGHT, LICENSE, and WARRANTY
 
-Doug Burke <djburke@cpan.org>
-
-=head1 COPYRIGHT
-
-Copyright (c) 2003, Doug Burke.
-
-All Rights Reserved. This module is free software. It may be used,
-redistributed and/or modified under the same terms as Perl itself.
-
-See http://www.perl.com/perl/misc/Artistic.html.
+See the L<Inline::SLang|Inline::SLang> documentation.
 

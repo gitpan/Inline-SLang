@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 33;
+use Test::More tests => 34;
 
 use Data::Dumper;
 
@@ -25,7 +25,7 @@ sub approx ($$$) {
 
 use Inline 'SLang';
 
-my ( $ret1, $ret2, @ret );
+my ( $ret1, $ret2, $ret3, @ret );
 
 ## Integers
 $ret1 = scalari2();
@@ -100,7 +100,7 @@ is( $ret1, 2, 'scalar string [stack only]' );
 print Dumper($ret[0]), "\n";
 
 is ( $#ret, 5, "num of datatypes is 6" );
-isa_ok( $ret[0], "Inline::SLang::datatype" );
+isa_ok( $ret[0], "Inline::SLang::DataType_Type" );
 is ( join( " ", map { "$_"; } @ret ),
   	"UChar_Type Short_Type Float_Type String_Type DataType_Type Null_Type",
 	'DataType values are converted correctly' );
@@ -128,7 +128,11 @@ is( $ret[2],   "aa", 'mixed scalars/datatypes okay' );
 ## Need to test the other types (many not yet supported)
 
 $ret1 = retnull();
-ok( !defined $ret1, 'NULL returned as undef' );
+ok( !defined($ret1), 'NULL returned as undef' );
+
+( $ret1, $ret2, $ret3 ) = retabc();
+ok( defined($ret1) && defined($ret3) && !defined($ret2),
+      "returning NULL's as undef doesn't mess up the stack" );
 
 __END__
 
@@ -164,4 +168,5 @@ define scalar_45_dtype_aa() { return ( 45, DataType_Type, "aa" ); }
 
 % NULL
 define retnull() { return NULL; }
+define retabc()  { return ( "a string", NULL, 22.4 ); }
 

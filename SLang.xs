@@ -163,18 +163,20 @@ _sl_eval( str )
     /* stick any return values on the stack */
     CONVERT_SLANG2PERL_STACK
 
-# this is a hack introduced to allow perl code (the Inline::SLang::struct object)
-# to convert the object into S-Lang, rather than write it in C
+# support for reference handling -- used by DESTROY method
+# of Inline::SLang::reference object.
+# THis should be considered a hack for now
 #
-# have this "indirect" reference to pl2sl() just to avoid messing up
-# the current code base too much
-#
-
 void
-_pl2sl( item )
-    SV * item
+_sl_free_ref( ptr )
+    SV * ptr
+  PREINIT:
+    SLang_Ref_Type *ref;
   PPCODE:
-    pl2sl( item );
+    /* assume we're called correctly */
+    ref = INT2PTR( SLang_Ref_Type *, SvIV(ptr) );
+    Printf( ( "About to delete S-Lang ref pointer %p\n", ref) );
+    SLang_free_ref( ref );
 
 #undef  NUM_FIXED_ARGS
 #define NUM_FIXED_ARGS 1

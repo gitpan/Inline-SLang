@@ -1,13 +1,13 @@
 #
 # test in/out of structures
 #
-# we also test the Inline::SLang::struct object
+# we also test the Inline::SLang::Struct_Type object
 # (since it's our object we'd best test it!)
 #
 
 use strict;
 
-use Test::More tests => 19;
+use Test::More tests => 23;
 
 use Inline 'SLang';
 
@@ -35,27 +35,31 @@ my ( $ret1, $ret2, $ret3, @ret );
 
 $ret1 = struct1();
 ##print Dumper( $ret1 ), "\n";
-isa_ok( $ret1, "Inline::SLang::struct" );
+isa_ok( $ret1, "Inline::SLang::Struct_Type" );
+isa_ok( $ret1, "Inline::SLang::_Type" );
+ok( $ret1->is_struct_type, "and we are a structure" );
 
-ok( eq_array( $ret1->fields, [ "f1", "f2", "f4", "f3" ] ),
-	"  contains the correct fields (in the right order)" );
-is( $ret1->get("f1"),    1, "    f1 == 1" );
-is( $ret1->get("f2"), "f2", "    f2 == 'f2'" );
-ok( eq_array( $ret1->get("f4"), [1,2,3]),
-	"    f4 == [1,2,3]" );
-is( $ret1->get("f3"), undef, "    f3 == undef" );
+ok( eq_array( $ret1->get_field_names,
+	      [ "f1", "f2", "f4", "f3" ] ),
+    "  contains the correct fields (in the right order)" );
+is( $ret1->get_field("f1"),    1, "    f1 == 1" );
+is( $ret1->get_field("f2"), "f2", "    f2 == 'f2'" );
+ok( eq_array( $ret1->get_field("f4"), [1,2,3]),
+    "    f4 == [1,2,3]" );
+is( $ret1->get_field("f3"), undef, "    f3 == undef" );
 
-$ret1->set("f1",2);
-is( $ret1->get("f1"), 2, "changed f1 to 2" );
+$ret1->set_field("f1",2);
+is( $ret1->get_field("f1"), 2, "changed f1 to 2" );
 
-$ret1->set("f2",-1,"f3",-2.1);
-ok( eq_array( [$ret1->get("f2","f3")], [-1,-2.1] ),
+$ret1->set_field("f2",-1,"f3",-2.1);
+ok( eq_array( [$ret1->get_field("f2","f3")], [-1,-2.1] ),
     "changed f2 to -1 & f3 to -2.1" );
 
 # test stringification on an easy structure
 $ret1 = struct2();
 is(
    "$ret1",
+   "Structure Type: Struct_Type\n" .
    join( "", map { "\t$$_[0]\t= $$_[1]\n" } ( ["x1","a string"], ["y2","another string"] ) ),
    "The stringification works"
    );
@@ -64,36 +68,39 @@ is(
 ( $ret1, $ret2, $ret3 ) = ret_multi();
 ok( $ret1 == "more strings" && $ret3 == -234.5,
   "multi return: non-struct vals okay" );
-isa_ok( $ret2, "Inline::SLang::struct" );
-ok( !defined($ret2->get("gonzo")), "and structure field is NULL/undef" );
+isa_ok( $ret2, "Inline::SLang::Struct_Type" );
+ok( !defined($ret2->get_field("gonzo")), "and structure field is NULL/undef" );
 
 ## Perl 2 S-Lang
 
 # first test the object constructor
 #
-$ret1 = Inline::SLang::struct->new( ['a','x','a_space'] );
+$ret1 = Inline::SLang::Struct_Type->new( ['a','x','a_space'] );
 ##print Dumper( $ret1 ), "\n";
-isa_ok( $ret1, "Inline::SLang::struct" );
+isa_ok( $ret1, "Inline::SLang::Struct_Type" );
+isa_ok( $ret1, "Inline::SLang::_Type" );
+ok( $ret1->is_struct_type, "and we are a structure" );
 
-# have tested set() above, but repeat
+# have tested set_field() above, but repeat
 # - note leave 'a_space' as undef
 my $label = "  able to set fields in created structure";
-$ret1->set( "x" => 'a string', 'a' => [1,2,4] );
-is( $ret1->get("x"), "a string", $label );
-is( $ret1->get("a_space"), undef, $label );
-ok( eq_array( $ret1->get("a",), [1,2,4] ), $label );
+$ret1->set_field( "x" => 'a string', 'a' => [1,2,4] );
+is( $ret1->get_field("x"), "a string", $label );
+is( $ret1->get_field("a_space"), undef, $label );
+ok( eq_array( $ret1->get_field("a",), [1,2,4] ), $label );
 
 # debug: currently can't convert an array reference form perl to S-Lang, so change field a
-$ret1->set( 'a' => 1.2 );
+$ret1->set_field( 'a' => 1.2 );
 
 # now, can we convert it to a S-Lang Struct_Type?
-ok( is_a_struct($ret1), "Can convert Inline::SLang::struct to Struct_Type" );
+ok( is_a_struct($ret1),
+    "Can convert Inline::SLang::Struct_Type to Struct_Type" );
 ok( check_struct_fields($ret1,"a","x","a_space"),
 	"  and the field names/order are correct" );
 
 # check we don't mess up the stack
-ok( send3("a string",$ret1,Inline::SLang::datatype->new("Float_Type")),
-   "Inline::SLang::struct 2 S-Lang plays okay w/ stack" );
+ok( send3("a string",$ret1,Inline::SLang::DataType_Type->new("Float_Type")),
+   "Inline::SLang::Struct_Type 2 S-Lang plays okay w/ stack" );
 
 __END__
 
