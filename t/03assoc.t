@@ -1,3 +1,4 @@
+# -*-perl-*-
 #
 # test in/out of associative arrays
 #
@@ -74,19 +75,19 @@ TODO: {
 }
 
 TODO: {
-    todo_skip "need to handle Any_Type variables", 5;
+  todo_skip "Unable to handle arrays of Any_Type", 5;
 
-    $ret1 = assocarray_any();
-    print "Assoc array:\n" . Dumper($ret1), "\n";
-    is( ref($ret1), "HASH", "Assoc_Array [Any_Type] converted to hash array ref" );
-    ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
-	"   keys for assoc array are okay" );
+  $ret1 = assocarray_any1();
+  print "Assoc array:\n" . Dumper($ret1), "\n";
+  is( ref($ret1), "HASH", "Assoc_Array [] converted to hash array ref" );
+  ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+      "   keys for assoc array are okay" );
 
-    is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
-    is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
-    ok( eq_array( $$ret1{"1"}, [1,2,3,4] ),
-	'  key   1 == [1,2,3,4]' );
+  is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
+  is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
 
+  ok( eq_array( $$ret1{"1"}, [1,2,3,4] ),
+      '  key   1 == [1,2,3,4]' );
 }
 
 ## perl 2 S-Lang
@@ -129,8 +130,18 @@ define assocarray_array () {
   return foo;
 }
 
-define assocarray_any () {
+define assocarray_any1 () {
   variable foo = Assoc_Type [];
+  foo["a"]   = "aa";
+  foo["b b"] = 1.2;
+% do not handle array of Any_Type variables at the moment
+%  foo["1"]   = [1:4];
+  foo["1"] = NULL;
+  return foo;
+}
+
+define assocarray_any2 () {
+  variable foo = Assoc_Type [Any_Type];
   foo["a"]   = "aa";
   foo["b b"] = 1.2;
   foo["1"]   = [1:4];
@@ -144,7 +155,5 @@ define ret_multi() {
   return "a string", foo, 22.4;
 }
 
-define input_assoc(x) {
-  if ( typeof(x) != Assoc_Type ) return 0;
-}
+define input_assoc(x) { return typeof(x) == Assoc_Type; }
 

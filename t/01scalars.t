@@ -1,3 +1,4 @@
+# -*-perl-*-
 #
 # test scalars
 # . from Perl to S-Lang and vice-versa
@@ -14,7 +15,7 @@
 
 use strict;
 
-use Test::More tests => 27;
+use Test::More tests => 37;
 
 use Data::Dumper;
 
@@ -67,7 +68,6 @@ is( $ret1, " 2 ", "' ' + '2 ' = ' 2 '" );
 my %_hacked = ( "normal" => -23.2, "static" => 4, "private" => undef );
 foreach my $linkage ( qw( normal static private ) ) {
   $ret1 = retref($linkage);
-  isa_ok( $ret1, "Inline::SLang::Ref_Type" );
   isa_ok( $ret1, "Inline::SLang::_Type" );
   isa_ok( $ret1, "Inline::SLang::Ref_Type" );
   is( unref($ret1), "a $linkage string", "  can deref $linkage linkage" );
@@ -83,6 +83,18 @@ ok( $ret1 == 12 && $ret3 eq "foo bar",
   "Ref_Type handling okay with the stack" );
 isa_ok( $ret2, "Inline::SLang::Ref_Type" );
 is( unref($ret2), $_hacked{"normal"}, "  de-reffed correctly" );
+
+# anytype tests
+#
+foreach my $i ( 0, 1, 2 ) {
+  $ret1 = getanytype5($i);
+  isa_ok( $ret1, "Inline::SLang::_Type" );
+  isa_ok( $ret1, "Inline::SLang::Any_Type" );
+  is( "$ret1", "Any_Type", "  Any_Type stringifies correctly" );
+  is( $ret1->is_struct_type, 0, "  and isn't a structure" );
+}
+$ret1 = getanytype5(3);
+ok( !defined $ret1, "a Null_Type [in Any_Type] has been converted to undef" );
 
 __END__
 __SLang__
@@ -135,4 +147,12 @@ define hackref(id) {
 define unref(x) { return @x; }
 
 define retref_multi() { return ( 12, &_a_normal_string, "foo bar" ); }
+
+%% AnyType tests
+variable _anytype5 = Any_Type [5];
+_anytype5[0] = 1;
+_anytype5[1] = "a string";
+_anytype5[2] = &_anytype5;
+
+define getanytype5(i) { return _anytype5[i]; }
 

@@ -20,36 +20,7 @@
 #  define fixme(x)     /* empty */
 #endif
 
-
 #include "slang.h"
-
-/*
- * BAD BAD BAD code
- * I want to create a SLang_Ref_Type object and
- * push it onto the S-Lang stack but there does
- * not appear to be any public routines for this
- *
- * sltypes.c/_SLang_push_ref() would be good since
- *   it is not statically linked, but we would
- *   need to access the elements of the ref structure
- *   (which is not publibally defined)
- *
- * so, for now, we hack out the structure definition
- * from _slang.h and include it here. This is NOT
- * good code. 
- *
- */
-typedef struct
-{
-  int is_global;
-  union
-  {
-    /* assuming can use 'void *' instead of the actual pointer types */
-    VOID_STAR nt;
-    VOID_STAR local_obj;
-  }
-  v;
-} _Inline_SLang_Ref_Type;
 
 /* functions that are visible outside of util.c */
 void pl2sl( SV *item );
@@ -85,6 +56,7 @@ SV * sl2pl( void );
 
 #define C2PL_MARG(x)   XPUSHs( sv_2mortal( x ) )
 #define C2PL_MARG_D(x) C2PL_MARG( newSVnv( x ) )
+#define C2PL_MARG_S(x) C2PL_MARG( newSVpv( x, 0 ) )
 
 #define CALL_METHOD_VOID(object,method,parstring) \
  { \

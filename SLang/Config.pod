@@ -78,11 +78,14 @@ functionality you should probably be using the 2-argument
 form of S-Lang's C<import> and C<evalfile> commands
 instead.
 
+The following examples are also available from the
+F<examples/> directory of the package.
+
 =over 2
 
 =item Example of using a single namespace:
 
- use Inline 'SLang' => Config => BIND_NS => "foo";
+ use Inline 'SLang' => Config => BIND_NS => ["foo"];
  use Inline 'SLang' => <<'EOS1';
   define fn_in_global(x) { "in global"; }
   implements( "foo" );
@@ -90,12 +93,12 @@ instead.
  EOS1
 
  # this works
- printf "I am in %s\n", foo::fn_in_foo("dummyval");
+ printf "I am %s\n", foo::fn_in_foo("dummyval");
 
  # this does not work since fn_in_global is in the
  # Global namespace which was not given to the
  # BIND_NS option
- printf "I am in %s\n", fn_in_global("dummyval");
+ printf "I am %s\n", fn_in_global("dummyval");
 
 =item Example of using multiple namespaces:
 
@@ -107,10 +110,10 @@ instead.
  EOS1
 
  # this works
- printf "I am in %s\n", foo::fn_in_foo("dummyval");
+ printf "I am %s\n", foo::fn_in_foo("dummyval");
 
  # as does this
- printf "I am in %s\n", fn_in_global("dummyval");
+ printf "I am %s\n", fn_in_global("dummyval");
 
 =item Example of renaming a namespace:
 
@@ -122,10 +125,10 @@ instead.
  EOS1
 
  # this works
- printf "I am in %s\n", bar::fn_in_foo("dummyval");
+ printf "I am %s\n", bar::fn_in_foo("dummyval");
 
  # as does this
- printf "I am in %s\n", fn_in_global("dummyval");
+ printf "I am %s\n", fn_in_global("dummyval");
 
 =item Example of using all namespaces:
 
@@ -137,10 +140,10 @@ instead.
  EOS1
 
  # this works
- printf "I am in %s\n", foo::fn_in_foo("dummyval");
+ printf "I am %s\n", foo::fn_in_foo("dummyval");
 
  # as does this
- printf "I am in %s\n", fn_in_global("dummyval");
+ printf "I am %s\n", fn_in_global("dummyval");
 
 =back
 
@@ -212,7 +215,7 @@ C<Inline::SLang>) is:
           foo()
 
 Any S-Lang intrinsic functions bound to Perl are indicated using
-the format C<S-Lang name() -E<gt> Perl name()>, even when the
+the format C<< S-Lang name() -> Perl name() >>, even when the
 Perl and S-Lang names match (this may change).
 
 =head1 SEE ALSO

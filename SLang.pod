@@ -1,6 +1,6 @@
 =head1 NAME
 
-Inline::SLang - Write Perl subs in S-Lang.
+Inline::SLang - Write Perl subroutines in S-Lang.
 
 =head1 SYNOPSIS
 
@@ -89,7 +89,7 @@ and then use them in your Perl code. For example:
    END
 
    # now call the S-Lang function from Perl
-   doit();
+   doit;
 
 By default all S-Lang functions - other than S-Lang intrinsic
 functions (the functions defined by the S-Lang interpreter,
@@ -158,6 +158,7 @@ for converting from S-Lang to Perl than the other way around.
 
 The module is designed to work with version 1.4.x of the S-Lang
 library, although I make no promises for anything earlier than 1.4.4.
+In fact, I may up this to about 1.4.9, for ease of testing.
 
 The support for the BIND_NS option is flaky prior to
 v1.4.3 (it appears to be due to S-Lang and not this module).
@@ -171,7 +172,7 @@ Inline::S-Lang has so far been tested on Linux and Solaris 2.8
 only. It should work on UNIX platforms; I would be surprised if 
 it works without tweaking on other systems.
 
-Perl versions tested: 5.6.1 (solaris), 5.8.0 (linux)
+Perl versions tested: 5.8.0 (solaris and linux).
 
 It is intended to support Perl versions >= 5.6.0 only (at least the
 release versions rather than the development releases). It is not
@@ -205,6 +206,53 @@ any way related to the above people.
 =head1 CHANGES
 
 =over 4
+
+=item v0.06 Thu Apr  3 22:36:54 EST 2003
+
+Note that in the next release the class names for objects will be
+shortened from Inline::SLang::Foo_Type to Foo_Type.
+
+Notable changes are:
+
+=over 4
+
+=item *
+
+Essentially all S-Lang I<scalars> can now be converted to
+Perl. Those without a direct translation to a native Perl
+type are converted to "opaque" Perl objects, with classes
+called C<Inline::SLang::XXX> where C<XXX> equals the
+name of their S-Lang data type. Essentially all you can
+do with these objects is pass them back to S-Lang
+routines. However, it does mean you can now call routines that
+return module-defined types.
+
+Currently the S-Lang file types (so C<File_Type> and
+C<FD_Type>) are converted using this scheme, which means you
+can I<not> use them with Perl I/O commands. I need to
+read up a lot more on Perl's I/O mechanism before I
+can change this (if it's possible).
+
+=item *
+
+"Named" structures - e.g. C<Foo_Type> created by
+C<< typedef struct {...} Foo_Type; >> - are now handled
+as C<Inline::SLang::XXX> objects, where C<XXX> matches the 
+structure type (so C<Foo_Type> in this example).
+These classes are sub-classes of C<Inline::SLang::Struct_Type>.
+
+=item *
+
+Fixed handling of BIND_NS =E<gt> "All".
+
+=item *
+
+Added an examples/ directory to the distribution, which
+contains simple examples (mainly from L<Inline::SLang::Types>).
+Note that these files are I<not> installed into the Perl
+tree by 'make install'.
+
+=back
 
 =item v0.05 Fri Mar 14 11:57:31 EST 2003
 

@@ -1,6 +1,6 @@
 =head1 NAME
 
-Inline::SLang::Types - Support for S-Lang types
+Inline::SLang::Types - Support for S-Lang types in Perl
 
 =head1 SYNOPSIS
 
@@ -57,22 +57,8 @@ types, such as C<Inline::SLang::struct>.
 
 =head2 Supported Perl Data Types
 
- ***
- *** NOTE: actually, for unsupported types we currently die
- ***
-
 The following data types may be passed from Perl into S-Lang. Any
-unrecognized type is replaced with C<undef> during translation.
-
-I am leaning towards returing some sort of opaque reference
-for unrecognized types - eg C<Inline::SLang::unknown> - 
-so that the perl code won't be able
-to access them but will be able to pass them along to other
-S-Lang routines which can use them. This is necessary to
-allow support of modules and/or packages which may define
-new types. We may be able to make the class name more
-meaningful (i.e. replace C<unknown> by the S-Lang type
-of the variable). Or we may not.
+other type results in a C<croak>.
 
 =over 4
 
@@ -81,8 +67,6 @@ of the variable). Or we may not.
 undef
 
 Converted to C<NULL>.
-
-See discussion above (e.g. C<Inline::SLang::unknown>).
 
 =item *
 
@@ -110,59 +94,41 @@ Converted to S-Lang C<String_Type>.
 
 =item *
 
-Inline::SLang::DataType_Type
-
-Converted to S-Lang C<DataType_Type>.
-
-=item *
-
-Inline::SLang::Struct_Type
-
-Converted to S-Lang C<Struct_Type>.
-
-LEAKS MEMORY.
-
-=item *
-
-Inline::SLang::Ref_Type
-
-Converted to S-Lang C<Ref_Type>.
-
-=item *
-
 Array Reference
 
-*** NOT SUPPORTED ***
+*** NOT YET SUPPORTED ***
 
-I am leaning towards returning an array of type
+I am thinking about returning an array of type
 C<Any_Type>, since there's no guarantee that the perl
 array will be of one type, or form a regular nD array.
+However, this isn't going to be remotely useful.
+
+The first element of the perl array can be useful,
+but if it contains "1.0" is it an array of strings?
 
 =item *
 
 Hash Reference
 
-*** NOT SUPPORTED ***
+*** NOT YET SUPPORTED ***
 
 This should be converted to a S-Lang C<Assoc_Type> object.
-Since we don't know the types of all the elements in
-the Perl hash array, it's simplest to always create 
-the values as C<Any_Type> variables. That's if I 
-actually knew how to do that...
 
 =item *
 
-all others
+Inline::SLang::XXX Objects
 
-*** NOT SUPPORTED ***
+Converted to S-Lang C<XXX>, where C<XXX> is a
+valid S-Lang variable type.
+
+The C<Struct_Type> code may leak memory.
 
 =back
 
 =head2 Supported S-Lang Data Types
 
 The following S-Lang types may be returned from a S-Lang function to
-Perl. Unrecognized types currently cause the code to die
-(or perhaps to return undef; I really should check).
+Perl.
 
 =over 4
 
@@ -200,22 +166,6 @@ Converted to a perl string.
 
 =item *
 
-DataType_Type
-
-An object of class C<Inline::SLang::DataType_Type> is
-returned.
-See L<below|/"DATATYPE CLASSES"> for further details.
-
-=item *
-
-Ref_Type
-
-An object of class C<Inline::SLang::Ref_Type> is
-returned.
-See L<below|/"DATATYPE CLASSES"> for further details.
-
-=item *
-
 Array_Type
 
 Converted to a perl array reference. Currently
@@ -233,24 +183,27 @@ only works if the values stored in the array are of
 a type which we can convert into a 1D array. So,
 'C<variable a = Assoc_Type [Int_Type];>' will be converted,
 but 'C<variable b = Assoc_Type [];>' will not, since we
-do not currently support C<Any_Type> objects.
+do not currently support 1D arrays of C<Any_Type> objects
+(an implementation isue).
 
 =item *
 
-Struct_Type
+Struct_Type and "named" structures
 
-An object of class C<Inline::SLang::Struct_Type> is
-returned.
+An C<Inline::SLang::XXX> object - where C<XXX> is
+the S-Lang type - is created.
+
+See the C<Inline::SLang::Struct_Type> discussion
+L<below|/"DATATYPE CLASSES"> for further details.
+
+=item *
+
+Other S-Lang type
+
+An object of class C<Inline::SLang::XXX> is
+returned, where C<XXX> is the name of the S-Lang
+data type.
 See L<below|/"DATATYPE CLASSES"> for further details.
-
-=item *
-
-all others
-
-*** NOT SUPPORTED ***
-
-Will likely use the C<Inline::SLang::unknown> class (or
-at least someting that resembles this idea).
 
 =back
 
@@ -283,7 +236,7 @@ information on how to use this class.
 =head2 Numeric types as piddles
 
  ***
- *** Support for PDL is not yet available (v0.05)
+ *** Support for PDL is not yet available (v0.06)
  ***
 
 The L<Perl Data Language (PDL)|PDL> is a set of perl
@@ -359,66 +312,21 @@ if it does not match that of the C<typeof()> method.
 
 =item is_struct_type()
 
-Returns a 1 if the object represents a S-Lang structure,
-and 0 otherwise.
-This is currently rather useless since the only class 
-for which a 1 is returned is C<Inline::SLang::Struct_Type>.
-It has been introduced in the hope that we will be able
-to create objects for "named" structures (ie
-those created via S-Lang's C<typedef> command).
+Returns a 1 if the object represents a S-Lang structure
+- including "named" structures created via a typedef - and
+0 otherwise.
 
 =back
 
-=head2 DataType_Type
-
-S-Lang C<Datatype_Type> values are represented using
-C<Inline::SLang::DataType_Type> objects.
-
-The class-specific methods are:
-
-=over 4
-
-=item new()
-
-  $dtype = Inline::SLang::DataType_Type->new($type);
-
-The C<new()> method accepts a string (C<$type>) 
-containing the name of the S-Lang datatype (e.g.
-"UChar_Type").
-
-=item stringify()
-
-The name of the datatype represented by the
-object is returned.
-
-For instance
-
-  $type = Inline::SLang::DataType_Type->new("Any_Type");
-  print("And the type is '$type'\n");
-
-outputs
-
-  And the type is 'Any_Type'.
-
-Note that the C<typeof()> method returns the
-string "DataType_Type" and I<not> the value of the
-variable.
-
-=back
-
-=head2 Struct_Type
-
- ***
- *** I want to represent structures like
- ***   typedef struct {...} FooBar_Struct;
- *** as Inline::SLang::FooBar_Struct objects 
- *** but I need to think about this/work on it
- *** first ...
- ***
+=head2 Struct_Type and "named" structs
 
 S-Lang structures - variables with a type of C<Struct_Type> -
 are represented using
 C<Inline::SLang::Struct_Type> objects.
+Named structs - ie created via C<typedef struct {} XXX> -
+are represented using 
+C<Inline::SLang::XXX> objects; these objects are
+sub-classes of the C<Inline::SLang::Struct_Type> class.
 
 The methods are similar to the S-Lang versions, although
 C<struct_> has been removed from the names and the get and
@@ -456,6 +364,10 @@ accepts a list of field names using I<either> an
 array reference or as an actual list. The order of
 the array determines the order of the fields in the
 structure.
+
+For "named" structures, the C<new()> method does
+I<not> accept a list of field names, since the fields
+is fixed for a given named struct.
 
 It is I<not> possible to set the values of the fields
 with this method (at least not for now; perhaps
@@ -517,18 +429,191 @@ outputs
 
 =back
 
-=head2 Ref_Type
+As a simple example of using S-Lang struct's:
 
-S-Lang C<Ref_Type> values are represented using
-C<Inline::SLang::Ref_Type> objects. Note that these
-objects can I<only> be created from S-Lang
-(i.e. there is no C<new()> method).
+  use Inline SLang;
+
+  $a = ret1();
+  print "Class of \$a is " . ref($a) . "\n";
+  print "$a\n";
+
+  $b = ret2();
+  print "Class of \$b is " . ref($b) . "\n";
+  print "$b\n";
+
+  __END__
+  __SLang__
+
+  define ret1() {
+    variable a = struct { a, b };
+    a.a = 1; a.b = "foo"; return a;
+  }
+
+  typedef struct { a, b } SimpleStruct_Type;
+  define ret2() {
+    variable a = @SimpleStruct_Type;
+    a.a = 2; a.b = "bar"; return a;
+  }
+
+The output of this code is:
+
+  Class of $a is Inline::SLang::Struct_Type
+  Structure Type: Struct_Type
+          a       = 1
+          b       = foo
+
+  Class of $b is Inline::SLang::SimpleStruct_Type
+  Structure Type: SimpleStruct_Type
+          a       = 2
+          b       = bar
+
+=head2 DataType_Type
+
+S-Lang C<Datatype_Type> values are represented using
+C<Inline::SLang::DataType_Type> objects.
+
+The class-specific methods are:
+
+=over 4
+
+=item new()
+
+  $dtype = Inline::SLang::DataType_Type->new([$type]);
+
+The C<new()> method accepts a string (C<$type>) 
+containing the name of the S-Lang datatype (e.g.
+"UChar_Type"). If no variable is supplied then
+"DataType_Type" is assumed.
+
+Synonyms of types (eg 'Int_Type' for
+'Integer_Type') are accepted but converted to
+the 'original' type name.
+
+Note that if you supply a name that does I<not>
+map to a S-Lang datatype then:
+
+=over 2
+
+=item *
+
+C<undef> will be returned
+
+=item *
+
+Several lines of text will be printed to C<STDERR>
+by the S-Lang library, looking something like:
+
+  S-Lang Error: Undefined Name: ... is undefined
+  S-Lang Error: Undefined Name: called from line 1, file: ***string***
+  S-Lang Error: Undefined Name: called from eval: ...
+
+=back
+
+=item stringify()
+
+The name of the datatype represented by the
+object is returned.
+
+For instance
+
+  $type = Inline::SLang::DataType_Type->new("Any_Type");
+  print("And the type is '$type'\n");
+
+outputs
+
+  And the type is 'Any_Type'.
+
+Note that the C<typeof()> method returns the
+string "DataType_Type" and I<not> the value of the
+variable.
+
+=back
+
+=head2 Other Inline::SLang::XXX objects
+
+These objects are used to store S-Lang data types
+for which there is no obvious - or perhaps easy - 
+way to represent in Perl. Examples are
+C<Ref_Type> and C<Any_Type> S-Lang types.
+
+The Perl objects can I<only> be created from S-Lang
+(i.e. there are no C<new()> methods).
 In fact, there is little that you can do with these
 objects in Perl; if you want to access/change the
 value referred to then you need to pass the object
 back to S-Lang.
 
-There are no class-specific methods.
+There are I<no> class-specific methods. This means that
+there is no way of creating one of these objects
+except from S-Lang (i.e. there is no object
+constructor in Perl).
+
+An example, using S-Lang references, is:
+
+  use Inline SLang;
+
+  my $ref = getfoo();
+  print "\$ref is a " . ref($ref) . " object\n";
+  print "And when printed as a string = $ref\n";
+  printfoo($ref);
+  changefoo($ref,"no it isn't");
+  printfoo($ref);
+
+  __END__
+  __SLang__
+
+  variable foo = "this is a string";
+  define getfoo() { return &foo; }
+  define printfoo(x) { () = printf("foo = [%s]\n", @x ); }
+  define changefoo(x,y) { @x = y; }
+
+The output of this script is:
+
+  $ref is a Inline::SLang::Ref_Type object
+  And when printed as a string = Ref_Type
+  foo = [this is a string]
+  foo = [no it isn't]
+
+And for C<Any_Type> variables:
+
+  use Inline SLang;
+
+  my $a0 = getfoo(0);
+  my $a1 = getfoo(1);
+  my $a2 = getfoo(2);
+  print "\nIn Perl:\n";
+  printf "typeof(foo[0]) = %s\n", $a0->typeof;
+  printf "typeof(foo[1]) = %s\n", $a1->typeof;
+  printf "typeof(foo[2]) = %s\n",
+    defined($a2) ? $a2->typeof : "undef";
+
+  __END__
+  __SLang__
+
+  variable foo = Any_Type [3];
+  foo[0] = "a string";
+  foo[1] = 23;
+
+  define getfoo(x) { return foo[x]; }
+  message( "In S-Lang:" );
+  vmessage( "typeof(foo[0]) = %s", string(typeof(foo[0])) );
+  vmessage( "typeof(foo[1]) = %s", string(typeof(foo[1])) );
+  vmessage( "typeof(foo[2]) = %s", string(typeof(foo[2])) );
+
+The output of this script is:
+
+  In S-Lang:
+  typeof(foo[0]) = Any_Type
+  typeof(foo[1]) = Any_Type
+  typeof(foo[2]) = Null_Type
+
+  In Perl:
+  typeof(foo[0]) = Any_Type
+  typeof(foo[1]) = Any_Type
+  typeof(foo[2]) = undef
+
+Note that the C<Null_Type> value (in S-Lang) has been converted
+into a Perl C<undef> value.
 
 =head1 SEE ALSO
 

@@ -123,12 +123,66 @@ BOOT:
 
 PROTOTYPES: DISABLE
 
+# return the S-Lang version as a string
+
 char *
 _sl_version( )
   CODE:
     RETVAL = _slang_version;
   OUTPUT:
     RETVAL
+
+# return, as an associative array reference, the 
+# names of defined types (key) and a 2-element
+# array containing the class number and a boolean flag
+# indicating whether the type is a "named" struct.
+# Note that Struct_Type objects will have 0, confusingly enough
+#
+# Now, this latter piece of information is hard to find out
+# - for now I'm going to use a S-Lang library routine that 
+#   is not in slang.h but is not marked static
+# - this is not the best thing
+#
+# this is partly hacking at the internals of S-Lang,
+# even if the routines are public
+#
+void
+_sl_defined_types( )
+  PREINIT:
+    SLang_Class_Type *_SLclass_get_class( unsigned char ); /* from slclass.c */
+    HV *hashref;
+    AV *arrayref;
+    char *name;
+    int i, sflag;
+
+  PPCODE:
+    /* create the hash array to store the results in */
+    hashref = (HV *) sv_2mortal( (SV *) newHV() );
+
+    /*
+     * assume that the max number of types is 256
+     * - this is not a great thing to do
+     * and the use of _SLclass_get_class() et al 
+     * is even worse
+     */
+    for ( i = 0; i < 256; i++ ) {
+      if ( SLclass_is_class_defined(i) ) {
+        name = SLclass_get_datatype_name( (SLtype) i );
+	sflag = _SLclass_get_class( (unsigned char) i )->cl_struct_def != NULL;
+
+	arrayref = newAV();
+	av_extend( arrayref, (I32) 2 );
+	av_store( arrayref, 0, newSViv(i) );
+	av_store( arrayref, 1, newSViv(sflag) );
+
+        Printf( ("class number %d has a name of %s and struct flag = %d\n", i, name, sflag) );
+	(void) hv_store( hashref, name, strlen(name),
+		newRV_inc( (SV *) arrayref ), 0 );
+      }
+    } /* for: i */
+
+    /* return the associative array reference */
+    PUSHs( newRV_inc( (SV *) hashref) );
 
 # NOTE:
 #  the perl routine sl_eval, which calls this, ensures that the
@@ -137,6 +191,9 @@ _sl_version( )
 #
 # Shouldn't we just call S-Lang's eval using the perl wrapper
 # code ?
+#
+# Perhaps we should install an error handler to catch S-Lang errors
+# during SLang_load_string(). Perhaps to return the message in $@ ??
 #
 
 void
@@ -153,30 +210,14 @@ _sl_eval( str )
     Printf( ("----------------------------------------------------------------------\n") );
     if ( -1 == SLang_load_string(str) ) {
         /* do we really want to restart the S-Lang interpreter? */
-        /***
         SLang_restart (1);
         SLang_Error = 0;
-         ***/
-	croak( "Error -- sl_eval failed to parse input" );
+	/* if the user wants exception handling wrap sl_eval in an eval */
+	croak( "ERROR: sl_eval failed to parse input" );
 	// XSRETURN_EMPTY;
     }
     /* stick any return values on the stack */
     CONVERT_SLANG2PERL_STACK
-
-# support for reference handling -- used by DESTROY method
-# of Inline::SLang::reference object.
-# THis should be considered a hack for now
-#
-void
-_sl_free_ref( ptr )
-    SV * ptr
-  PREINIT:
-    SLang_Ref_Type *ref;
-  PPCODE:
-    /* assume we're called correctly */
-    ref = INT2PTR( SLang_Ref_Type *, SvIV(ptr) );
-    Printf( ( "About to delete S-Lang ref pointer %p\n", ref) );
-    SLang_free_ref( ref );
 
 #undef  NUM_FIXED_ARGS
 #define NUM_FIXED_ARGS 1

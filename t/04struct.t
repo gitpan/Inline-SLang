@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 23;
+use Test::More tests => 39;
 
 use Inline 'SLang';
 
@@ -71,6 +71,24 @@ ok( $ret1 == "more strings" && $ret3 == -234.5,
 isa_ok( $ret2, "Inline::SLang::Struct_Type" );
 ok( !defined($ret2->get_field("gonzo")), "and structure field is NULL/undef" );
 
+# test type-deffed structures
+$ret1 = retbar();
+isa_ok( $ret1, "Inline::SLang::_Type" );
+isa_ok( $ret1, "Inline::SLang::Struct_Type" );
+isa_ok( $ret1, "Inline::SLang::Bar_Type" );
+is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
+
+ok( eq_array( $ret1->get_field_names, [ "foo", "bar" ] ),
+    "  and contains the correct fields (in the right order)" );
+is( $ret1->get_field("foo"),     2, "    foo == 2" );
+is( $ret1->get_field("bar"), "baz", "    bar == 'baz'" );
+is(
+   "$ret1",
+   "Structure Type: Bar_Type\n" .
+   join( "", map { "\t$$_[0]\t= $$_[1]\n" } ( ["foo",2], ["bar","baz"] ) ),
+   "  and the stringification works"
+   );
+
 ## Perl 2 S-Lang
 
 # first test the object constructor
@@ -102,8 +120,24 @@ ok( check_struct_fields($ret1,"a","x","a_space"),
 ok( send3("a string",$ret1,Inline::SLang::DataType_Type->new("Float_Type")),
    "Inline::SLang::Struct_Type 2 S-Lang plays okay w/ stack" );
 
-__END__
+# test type-deffed structures
+$ret1 = Inline::SLang::Bar_Type->new();
+isa_ok( $ret1, "Inline::SLang::_Type" );
+isa_ok( $ret1, "Inline::SLang::Struct_Type" );
+isa_ok( $ret1, "Inline::SLang::Bar_Type" );
+is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
 
+$label = "  able to set fields in type-deffed structure";
+$ret1->set_field( "bar" => 3, "foo" => "bar" );
+is( $ret1->get_field("foo"), "bar", $label );
+is( $ret1->get_field("bar"), 3, $label );
+ok( check_bar($ret1), "  and can convert to S-Lang" );
+
+# check we don't mess up the stack
+ok( send3("a string",$ret1,Inline::SLang::DataType_Type->new("Float_Type")),
+   "Inline::SLang::Bar_Type 2 S-Lang plays okay w/ stack" );
+
+__END__
 __SLang__
 
 define struct1 () {
@@ -127,15 +161,27 @@ define ret_multi () {
   return "more strings", struct { gonzo }, -234.5;
 }
 
+% test
+typedef struct { foo, bar } Bar_Type;
+define retbar() {
+  variable bar = @Bar_Type;
+  bar.foo = 2;
+  bar.bar = "baz";
+  return bar;
+} % retbar()
+
 %% Perl 2 S-Lang
 
 define is_a_struct (x) { return is_struct_type(x); } 
 
 define send3 (x,y,z) {
-  !if ( x == "a string" )  return 0;
-  !if( is_struct_type(y) ) return 0;
-  !if( z == Float_Type )   return 0;
-  return 1;
+  if ( andelse
+       { x == "a string" }
+       { is_struct_type(y) }
+       { z == Float_Type } )
+    return 1;
+  else
+    return 0;
 }
 
 define check_struct_fields () {
@@ -158,5 +204,13 @@ define check_struct_fields () {
   return 1;
 } % check_struct_fields
 
-
-
+define check_bar(in) {
+  if (
+    andelse
+    { typeof(in) == Bar_Type }
+    { in.foo == "bar" }
+    { in.bar == 3 } )
+    return 1;
+  else
+    return 0;
+} % check_bar()

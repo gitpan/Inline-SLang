@@ -25,7 +25,7 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK);
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 @ISA = qw(Inline DynaLoader Exporter);
 @EXPORT_OK =
     qw(
@@ -173,7 +173,7 @@ sub build {
 	  if $ver < 10407;
 
 	# we will need to append to this after running sl_eval()
-	$bind_ns = @{ sl_eval( "_get_namespaces();" ) || [] };
+	$bind_ns = sl_eval( "_get_namespaces();" );
 	$bind_all_ns = 1;
       }			  
     }
@@ -265,6 +265,105 @@ sub build {
       }
     }
 
+    # now find the defined data types
+    # and create the perl classes
+    #
+    # From slang v1.4.8, the S-Lang defined types that we
+    # want to handle are:
+    #   Any_Type
+    #   BString_Type
+    #   FD_Type
+    #   File_Type
+    #   Ref_Type
+    #
+    # [would like to handle FD/File handles via PerlIO]
+    #
+    # The list below is the remaining types - ie those we plan
+    # to handle separately - either by using native Perl
+    # types or hand-crafter classes
+    # (ignoring the fact that 12/14 are both UInteger_Type)
+    #
+    my %ignore = map { ($_,1); }
+      (
+       'Undefined_Type', 
+       'Integer_Type', 
+       'Double_Type', 
+       'Char_Type', 
+       '_IntegerP_Type', 
+       'Complex_Type', 
+       'Null_Type', 
+       'UChar_Type', 
+       'Short_Type', 
+       'UShort_Type', 
+       'UInteger_Type', 
+       'Integer_Type', 
+       'String_Type', 
+       'Float_Type', 
+       'Struct_Type', 
+       'Array_Type', 
+       'DataType_Type', 
+       'Assoc_Type', 
+       );
+
+    my $dtypes = Inline::SLang::_sl_defined_types();
+    my $classes = "";
+    while ( my ( $dname, $dref ) = each %$dtypes ) {
+      next if exists $ignore{$dname};
+
+      # create the Perl class code
+      if ( $$dref[1] ) {
+	# a sub-class of Inline::SLang::Struct_Type
+	$classes .= qq{
+package Inline::SLang::$dname;
+no strict;
+\@ISA = ( "Inline::SLang::Struct_Type" );
+use strict;
+};
+
+	# find out the field names and create the constructor
+	my $fields = Inline::SLang::sl_eval(
+	     "get_struct_field_names(@" . $dname . ");"
+	);
+
+	$classes .=
+'sub new {
+  my $this  = shift;
+  my $class = ref($this) || $this;
+
+  # we have no inputs, since we know what the field names are
+  my @fields = ( ' . join(', ',map { "\"$_\""; } @$fields) . ' );
+  my $self = {
+    fields => [ @fields ],
+    data   => { map { ($_,undef) } @fields },
+  };
+  bless $self, $class;
+  return $self;
+
+} # new()
+';
+
+      } else {
+	# a sub-class of Inline::SLang::_Type
+	$classes .= qq{
+package Inline::SLang::$dname;
+no strict;
+\@ISA = ( "Inline::SLang::_Type" );
+use strict;
+sub new {
+  my \$this  = shift;
+  my \$class = ref(\$this) || \$this;
+  my \$key   = shift;
+  return bless \\\$key, \$class;
+}
+sub DESTROY {
+  my \$self = shift;
+  Inline::SLang::sl_eval( "_inline->_delete_data(\\"\$\$self\\");" );
+}
+};
+
+      }
+    } # while: each %$dtypes
+
     # Cache the results
     #
     my $odir = "$o->{API}{install_lib}/auto/$o->{API}{modpname}";
@@ -272,6 +371,8 @@ sub build {
 
     my $parse_info = Inline::denter->new->indent(
 	*namespaces => \%namespaces,
+        *sl_types   => $dtypes,
+        *pl_classes => $classes,
         *ns_map     => \%ns_map,
 	*code       => $o->{ILSM}{code},
     );
@@ -283,7 +384,9 @@ sub build {
     $fh->close();
 
     $o->{ILSM}{namespaces} = \%namespaces;
-    $o->{ILSM}{ns_map} = \%ns_map;
+    $o->{ILSM}{sl_types}   = $dtypes;
+    $o->{ILSM}{pl_classes} = $classes;
+    $o->{ILSM}{ns_map}     = \%ns_map;
     $o->{ILSM}{built}++;
 
 } # sub: build()
@@ -300,6 +403,14 @@ sub build {
 #    on what the overheads are (especially if we allow filtering)
 #    versus file I/O
 #
+# -- at some point we also create the Perl classes used to represent
+#    many of the S-Lang types
+#
+# Finish by creating the _inline namespace and it's constituents
+#   ( type, key ) = _store_data( value );
+#   _remove_data( key );
+#   _store = Assoc_Type [String_Type]
+# 
 #==============================================================================
 sub load {
     my $o = shift;
@@ -317,6 +428,8 @@ sub load {
       
       my %sldat = Inline::denter->new->undent($sldat);
       $o->{ILSM}{namespaces} = $sldat{namespaces};
+      $o->{ILSM}{sl_types}   = $sldat{sl_types};
+      $o->{ILSM}{pl_classes} = $sldat{pl_classes};
       $o->{ILSM}{ns_map}     = $sldat{ns_map};
       $o->{ILSM}{code}       = $sldat{code};
 
@@ -350,6 +463,66 @@ sub load {
 	sl_bind_function( "$qualname$plfn", $slns, $slfn );
       }
     }
+
+    # Set up the Perl classes to handle the registered types
+    #
+    eval $o->{ILSM}{pl_classes};
+    die "INTERNAL ERROR: Unable to create Perl classes for S-Lang types\n" .
+      "$@\n" if $@;
+      
+    # bind the _inline namespace
+    # v1.4.9 allows eval() to specify the namespace for the code
+    # - do not use apostrohpes (') in the S-Lang comments!!!
+    sl_eval( 
+'
+implements("_inline");
+private variable _store = Assoc_Type [];
+static define _store_data( invar ) {
+  % need a unique key for _store: for now go with this
+  % simple, but slow algorithm
+  %
+  variable key = 0;
+  while ( assoc_key_exists(_store,string(key)) ) { key++; }
+  key = string(key);
+  if ( assoc_key_exists(_store,key) ) {
+    % want to use exit(), but that is not part of S-Lang; slsh provides it
+    error( "Internal error: unable to find a unique key when storing data" );
+%    message("Internal error: unable to find a unique key when storing data");
+%    exit(1);
+  }
+  _store[key] = invar;
+  return ( "Inline::SLang::" + string(typeof(invar)), key );
+} % _store_data
+
+% note: assoc_delete_key() does nothing if the key
+% does not exist in the array
+%
+static define _delete_data( key ) { assoc_delete_key(_store,key); }
+
+% for speed we avoid error checking; if there is an error
+% this should cause a S-Lang error
+%
+static define _push_data( key ) { return _store[key]; }
+
+% useful for debugging
+%
+static define _dump_data () {
+  variable fp;
+  switch ( _NARGS )
+  { case 0: fp = stdout; }
+  { case 1: fp = (); }
+  { error( "Internal error: called _inline->dump_data incorrectly" ); }
+
+  () = fprintf( fp, "# Dump of stored S-Lang variables\n" );
+  foreach ( _store ) using ( "keys", "values" ) {
+    variable k, v;
+    ( k, v ) = ();
+    () = fprintf( fp, "  %s = \t%s\n", k, string(typeof(v)) );
+  }
+} % _dump_data
+'
+	     );
+    # do I need to end with an 'implements("Global");' ??
 
     $o->{ILSM}{loaded}++;
 
@@ -406,9 +579,23 @@ sub info {
     # we won't need to do this
     #
     my $ver = sl_eval("_slang_version_string");
-    $info .= "Version of S-Lang library:\n";
+    $info .= "Version of S-Lang:\n";
     $info .= "\tcompiled against " . _sl_version() . "\n";
-    $info .= "\tusing            $ver\n\n";
+    $info .= "\tusing            $ver\n";
+    $info .= "\tand Perl module  $VERSION\n\n";
+
+    $info .= "The following S-Lang types are recognised:\n";
+    my $str = "";
+    while ( my ( $dname, $dref ) = each %{ $o->{ILSM}{sl_types} } ) {
+      $str .= " $dname";
+      $str .= " [Struct_Type]" if $$dref[1];
+      if ( length($str) > 70 ) {
+	$info .= "$str\n";
+	$str = "";
+      }
+    }
+    $info .= "$str\n" unless $str eq "";
+    $info .= "\n";
 
     $info .= "The following S-Lang namespaces have been bound to Perl:\n\n";
     while ( my ( $slns, $plns ) = each %{ $o->{ILSM}{ns_map} } ) {
@@ -438,8 +625,7 @@ sub info {
 
 #==============================================================================
 # S-Lang datatypes as perl objects, all based on the Inline::SLang::_Type 
-# class, which doesn't actually provide that much functionality, but let's 
-# see how this approach pans out
+# class.
 #
 # Inline::SLang::_Type
 #
@@ -451,15 +637,17 @@ sub info {
 #     typeof()
 #     is_struct_type() [only useful when we support type-deffed structs]
 #
-#     _is_mmt() - internal function, may not be needed
-#
 #   Might want to add new() to this list (and have it croak)?
 #
-# - This is an experiment and may disappear as quickly as it
-#   appeared
+# To Do:
+#    remove Inline::SLang:: from the class names
+#
 #==============================================================================
 
 package Inline::SLang::_Type;
+
+use strict;
+use Carp;
 
 # returns the name of the object w/out the leading 'Inline::SLang' text
 sub typeof {
@@ -474,56 +662,14 @@ sub typeof {
 use overload ( "\"\"" => \&Inline::SLang::_Type::stringify );
 sub stringify { return $_[0]->typeof(); }
 
-# for internal use only - may not be needed
-sub _is_mmt { 0; }
-
-# only going to be useful if we create objects for
-# type-deffed structures
-#
 sub is_struct_type { 0; }
-
-#==============================================================================
-# Inline::SLang::DataType_Type
-#
-# - the type is returned as a string (which is the output of
-#   'typeof(foo);' for the S-Lang variable foo)
-# - the string is blessed into the Inline::SLang::DataType_Type object
-#
-#==============================================================================
-
-package Inline::SLang::DataType_Type;
-
-no strict; # stupid way to get package-scoped global
-@ISA = ( "Inline::SLang::_Type" );
-use strict;
-
-# currently we just take the string and bless it into this
-# class. So, there's no error checking.
-#
-# - perhaps we should call S-Lang to do this
-#
-sub new {
-    my $this  = shift;
-    my $class = ref($this) || $this;
-    my $self = shift || "";
-    return bless \$self, $class;
-} # sub: new()
-
-# over-ride the base 'stringify' method
-# since we actually want to print out the actual datatype,
-# and not that this is a DataType_Type object
-#
-use overload ( "\"\"" => \&Inline::SLang::DataType_Type::stringify );
-sub stringify { return ${$_[0]}; }
 
 #==============================================================================
 # Inline::SLang::Struct_Type
 #
-#  NOTE: Should typedef-fed structures be subclasses of this class
-#   so 'typedef struct { foo, bar } FooBar_Struct;' would create an
-#   object of class Inline::SLang::Struct_Type::FooBar_Struct ?
-#   OR Inline::SLang::FooBar_Struct ?
-#  my current preference is the latter
+#  Handle structs.
+#  type-deffed structs - e.g. 'typedef { foo, bar } Baz_Type;' -
+#  are handled by sub-classing this type
 #
 # Methods - based on those provided by S-Lang for structures:
 #   new()
@@ -531,6 +677,14 @@ sub stringify { return ${$_[0]}; }
 #   get_field_names()
 #   get_field() - extended to allow multiple fields
 #   set_field() - extended to allow multiple fields
+#
+# Note:
+#   to avoid having to add the same functions into the sub-classes
+#   of Inline::SLang::Struct_Type, we make all the functions
+#   aware of whether they are being run in the "base" [ie this] class
+#   or a derived class (the use of base is incorrect since _Type is
+#   really the base class ;)
+#   - which probably isn't a clever thing to do
 #
 # To do:
 #   set_fields() - need to think how interacts with set_field() extension
@@ -549,22 +703,12 @@ use strict;
 
 use Carp;
 
-# note:
-#   There are private methods which are only meant to be used by
-#   this module when converting between Perl and S-Lang datatypes.
-#   These begin with a '_' character.
-#   There's no guarantee that they will remain the same/exist in
-#   other versions of the module, so don't use ;)
-#
-
-# only going to be useful if we create objects for
-# type-deffed structures
-#
 sub is_struct_type { 1; }
 
 # Struct_Type
 # - field names stored as an array
 # - data stored as an associative array
+# - this method is over-ridden for "named" structs
 #
 sub new {
     my $this  = shift;
@@ -599,7 +743,7 @@ sub new {
         # should check up on S-Lang's allowable names
 	die "Error: field name ($field) is invalid."
 	    if $field =~ m/(\s|^\d)/;
-	die "Error: attempted to use the same field name ($field) twice creating an Inline::SLang::struct object"
+	die "Error: attempted to use the same field name ($field) twice creating an $class object"
 	    if exists $fields{$field};
 	push @fields, $field;
     }
@@ -673,17 +817,16 @@ sub set_field {
 } # sub: set_field()
 
 # over-ride the default object "stringification"
-# - include structure type for when we support
-#   typedef-fed structures
+# - include structure type for "named" structs
 #
 use overload ( "\"\"" => \&Inline::SLang::Struct_Type::stringify );
 sub stringify {
-    my $self = shift;
-    my $string = "Structure Type: " . $self->typeof() . "\n";
-    foreach my $field ( @{ $$self{fields} } ) {
-	$string .= "\t$field\t= $$self{data}{$field}\n";
-    }
-    return $string;
+  my $self = shift;
+  my $string = "Structure Type: " . $self->typeof() . "\n";
+  foreach my $field ( @{ $$self{fields} } ) {
+    $string .= "\t$field\t= $$self{data}{$field}\n";
+  }
+  return $string;
 }
 
 ## private methods for this object (no guarantee they will
@@ -693,41 +836,124 @@ sub stringify {
 # with the correct fields in $1, but doesn't actually execute it
 # (since this would convert it back into Perl which we don't want)
 #
+# we make this code also handle the case when called from a sub-class
+# of Inline::SLang::Struct_Type
+#
 sub _define_struct {
-    my $self = shift;
+  my $self  = shift;
+  my $class = ref($self) ||
+    die "Error: Inline::SLang::Struct_Type::_define_struct() can not be called as a class method";
+  $class = substr( $class, 15 );
+  if ( $class eq "Struct_Type" ) {
     return "\$1 = struct { " . join( ', ', @{ $$self{fields} } ) . " };";
+  } else {
+    return "\$1 = \@$class;"; # a lot easier ;)
+  }
+
 } # sub: _define_struct()
 
-
 #==============================================================================
-# Inline::SLang::Ref_Type
+# Inline::SLang::DataType_Type
+#
+# - the type is returned as a string (which is the output of
+#   'typeof(foo);' for the S-Lang variable foo)
+# - the string is blessed into the Inline::SLang::DataType_Type object
+# - we use S-Lang to create a DataType_Type variable so that we can
+#     a) check we have a datatype
+#     b) handle type synonyms correctly
+#
+# - if given an incorrect type name you WILL get ugly error messages printed
+#   to STDERR from S-Lang
 #
 #==============================================================================
 
-package Inline::SLang::Ref_Type;
+package Inline::SLang::DataType_Type;
 
 no strict; # stupid way to get package-scoped global
 @ISA = ( "Inline::SLang::_Type" );
 use strict;
 
-use Carp; # for croak()
-
-## do we need a new() method? I think it would be awkward
-## to do from perl.
-##
-#sub new {
-#    my $this  = shift;
-#    my $class = ref($this) || $this;
+# delegate all the checking to S-Lang itself, so that
+# we can handle class synonyms
 #
-#    croak "Error: unable to create an $class object (for now?)\n";
+# cheat and say an empty constructor creates a datatype_type
 #
-#    # create the object
-#    my $self = {};
-#    bless $self, $class;
-#    return $self;
-#} # sub: new()
+sub new {
+    my $this  = shift;
+    my $class = ref($this) || $this;
+    my $self  = shift || "DataType_Type";
 
-sub DESTROY { Inline::SLang::_sl_free_ref( ${ $_[0] } ); }
+    # this will convert class synonyms to their "base" class
+    #
+    # I guess with clever coding then you could get S-Lang
+    # to evaluate something here, but I am not going to worry about
+    # that (since you can call sl_eval() directly...)
+    #
+    my ( $flag, $val );
+    eval qq{
+      ( \$flag, \$val ) =
+        Inline::SLang::sl_eval(
+          "typeof($self)==DataType_Type;string($self);"
+        );
+    };
+
+    # return undef on failure
+    return undef unless defined $flag and $flag;
+
+    return bless \$val, $class;
+} # sub: new()
+
+# over-ride the base 'stringify' method
+# since we actually want to print out the actual datatype,
+# and not that this is a DataType_Type object
+#
+use overload ( "\"\"" => \&Inline::SLang::DataType_Type::stringify );
+sub stringify { return ${$_[0]}; }
+
+#==============================================================================
+# Inline::SLang::Assoc_Type
+#
+# Let's try and handle Assoc_Type arrays as tied hashes so that we can retain
+# knowledge of the S-Lang type of the fields.
+#
+#==============================================================================
+
+=begin FORTHEFUTURE
+
+package Inline::SLang::Assoc_Type;
+
+require Tie::Hash;
+
+no strict; # stupid way to get package-scoped global
+@ISA = qw( "Tie::ExtraHash" );
+use strict;
+
+# Usage:
+#   tie %foo, Inline::SLang::Assoc_Type;
+#   tie %foo, Inline::SLang::Assoc_Type, "Any_Type";
+#   tie %foo, Inline::SLang::Assoc_Type, "String_Type";
+#   tie %foo, Inline::SLang::Assoc_Type, "Array_Type"; ???
+#
+# these correspond to S-Lang's
+#
+#   variable foo = Assoc_Type [];
+#   variable foo = Assoc_Type [Any_Type];
+#   variable foo = Assoc_Type [String_Type];
+#   variable foo = Assoc_Type [Array_Type];
+#
+# At the moment we do not allow the default value, although that should
+# be easy to implement
+#
+# the object is a 2-element array: the first element is the hash
+# reference that Tie::ExtraHash needs; the second is a string representing
+# the type of the data stored in the array
+#
+
+# or at least that's the plan
+
+=end FORTHEFUTURE
+
+=cut
 
 #==============================================================================
 

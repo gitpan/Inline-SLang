@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 16;
+use Test::More tests => 19;
 
 use Data::Dumper;
 
@@ -58,12 +58,14 @@ is( $ret1, 0, '"foo" != NULL' );
 
 ## datatypes
 
+# now, Int_Type is a synonym, so let's see if it gets
+# converted to Integer_Type?
 $ret1 = Inline::SLang::DataType_Type->new( "Int_Type" );
 isa_ok( $ret1, "Inline::SLang::DataType_Type" );
 isa_ok( $ret1, "Inline::SLang::_Type" );
 ok( !$ret1->is_struct_type, "and we are not a structure" );
 
-is( "$ret1", "Int_Type",
+is( "$ret1", "Integer_Type",
 	"Able to 'stringify' the Inline::SLang::DataType_Type object" );
 
 foreach my $type ( qw( DataType_Type UChar_Type Any_Type Assoc_Type ) ) {
@@ -72,6 +74,19 @@ foreach my $type ( qw( DataType_Type UChar_Type Any_Type Assoc_Type ) ) {
 	Inline::SLang::DataType_Type->new( $type ) );
     ok( $ret1, "Recognises as a datatype: $type" );
 }
+
+# no type
+$ret1 = Inline::SLang::DataType_Type->new();
+isa_ok( $ret1, "Inline::SLang::DataType_Type" );
+is( "$ret1", "DataType_Type", "empty constructor converts to DataType_Type" );
+
+# incorrect type
+#
+# - perhaps we shouldn't include this test since it prints to STDERR ?
+#
+print "+++ NOTE: the error messages printed to the screen below are okay +++\n";
+$ret1 = Inline::SLang::DataType_Type->new("FooFooFooFoo");
+ok( !defined $ret1, "Can not create an unrecognised type" );
 
 __END__
 __SLang__

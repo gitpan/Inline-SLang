@@ -1,6 +1,35 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.06
+date:    Thu Apr  3 22:36:54 EST 2003
+changes:
+ - big improvement in amount of S-Lang scalar types that can be converted
+   to Perl (and vice versa). If a S-Lang type is not recognised then
+   it is converted into an Inline::SLang::XXX object, where XXX matches
+   the S-Lang type. These objects do not do much in Perl, but will
+   convert back to the S-Lang type. Types handled like this are
+     Ref_Type (removes hacky handling of this type 0.05); Any_Type; and
+     any module-defined types
+ - named/type-deffed structures - ie those created via 'typedef struct ...'
+   - are now handled as Inline::SLang::XXX objects, where XXX is
+   the S-Lang type name. These objects are sub-classes of the
+   Inline::SLang::Struct_type class.
+ - Inline::SLang::DataType_Type->new() now verifies that the type is
+   recognised by S-Lang. This means that type synonyms (eg 'Int_Type'
+   for 'Integer_Type' are recognised and converted to the 'base' type),
+   but it does mean that unrecognised values result in several lines of
+   S-Lang error messages being printed to STDERR. This could be stopped
+   by installing an error hook, but that's for later.
+
+ - fixed BIND_NS => "All"
+ - added examples/ directory (not too different from those in the tests
+   and in the Inline::SLang::Types documentation)
+
+Note that in the next release the class names for objects will be
+shortened from Inline::SLang::Foo_Type to Foo_Type.
+
+--
 version: 0.05
 date:    Fri Mar 14 11:57:31 EST 2003
 changes:

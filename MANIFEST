@@ -10,6 +10,13 @@ SLang.xs
 SLang/Config.pod
 SLang/Types.pod
 TODO
+examples/bind_all.pl
+examples/bind_foo.pl
+examples/bind_many.pl
+examples/bind_rename.pl
+examples/structs.pl
+examples/use_anytype.pl
+examples/use_refs.pl
 t/00init.t
 t/01scalars.t
 t/01scalars2perl.t
@@ -18,6 +25,7 @@ t/02arrays2perl.t
 t/02arrays2slang.t
 t/03assoc.t
 t/04struct.t
+t/20bind_all.t
 t/20bind_foo.t
 t/20bind_global.t
 t/20bind_many.t

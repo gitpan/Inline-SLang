@@ -7,29 +7,22 @@ Tests
     true/supported?])
 
 - S-Lang Assoc types to perl:
-    add support for arrays, any_type
+    add support for arrays
 
-- Memory leaks:
-  Have started leak tests but it's not been comprehensive.
+- check that S-Lang "opaque" variables passed through Perl and back to
+  S-Lang still exist once the perl variable that referenced them
+  has called it's DESTROY method.
 
 S-Lang to Perl
 --------------
 
-  - work out how to "support" unknown types: can we use a perl
-    object (Inline::SLang::OpaqueType say)? To do anything with it you
-    would have to pass it back to a S-Lang function - so like
-    the current design of the Inline::SLang::Ref_Type object.
-    As an example:
-
-      my $reg = regParse( "circle(100,200,20)" );
-      reg_some_other_routine( $reg, ... );
+- Should Structs use a tied hash? We would disallow creation
+    of fields and provide method to list the order of the
+    fields?
 
   - improve the support of 1D & 2D arrays
   - add support for nD arrays
   - use PDL
-
- Functions:
-  - handle reference types; are there others that are needed?
 
  Variables:
   - do we want to allow access to S-Lang variables (ie have them
@@ -38,26 +31,25 @@ S-Lang to Perl
 Perl to S-Lang
 --------------
 
- - most of it needs to be done!
+ - array and assoc arrays are the major sticking points.
+   Difficulty is what happens if given ("1.0", "1") since
+   this could be an array of strings or numbers [and, thanks to
+   Perl's DWIMery, it's both]
+
+   Let's try and use tied hash/arrays
 
 General
 -------
 
  - decide how to handle errors.
+   Perhaps should install an error handler to allow
+   _sl_eval to return the message in $@ than being printed to STDERR?
 
  - how do we support PDL? Should there be an option to convert
    arrays using one of:
      plain perl, return as a single 'string', as a piddle
 
  - improve documentation
-
- - do we allow users to 're-bind' the S-Lang interpreter during
-   a program: ie program loads and S-Lang is bound to Perl; user
-   does an eval in S-Lang to create a new function and wants that
-   available from Perl, so they'd want to 're-bind' things. This
-   wouldn't be automatic (too slow) so they'd have to request this.
-   And the function(s) wouldn't be available the next time the
-   script were loaded (ie not saved as part of the cached code)
 
 Compilation
 -----------
