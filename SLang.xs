@@ -89,9 +89,12 @@
         break; \
  \
       default: \
-        /* shouldn't happen */ \
+        /* shouldn't happen with perl <= 5.8.0 */ \
+        croak( "Internal error: GIMME_V is a value I don't understand\n" ); \
  \
     } /* switch(GIMME_V) */
+
+static char *_slang_version = SLANG_VERSION_STRING; /* do we really need this ? */
 
 /*
  * Initialize the S-Lang interpreter with all the intrinsic functions
@@ -119,6 +122,13 @@ BOOT:
   do_slinit();
 
 PROTOTYPES: DISABLE
+
+char *
+_sl_version( )
+  CODE:
+    RETVAL = _slang_version;
+  OUTPUT:
+    RETVAL
 
 # NOTE:
 #  the perl routine sl_eval, which calls this, ensures that the
@@ -148,32 +158,44 @@ _sl_eval( str )
         SLang_Error = 0;
          ***/
 	croak( "Error -- sl_eval failed to parse input" );
-	XSRETURN_EMPTY;
+	// XSRETURN_EMPTY;
     }
     /* stick any return values on the stack */
     CONVERT_SLANG2PERL_STACK
 
-#undef  NUM_FIXED_ARGS
-#define NUM_FIXED_ARGS 2
-
-# note: namespace isn't used at the moment - is it needed?
+# this is a hack introduced to allow perl code (the Inline::SLang::struct object)
+# to convert the object into S-Lang, rather than write it in C
+#
+# have this "indirect" reference to pl2sl() just to avoid messing up
+# the current code base too much
+#
 
 void
-sl_call_function( slns, fname, ... )
-    char *  slns
-    char *  fname
+_pl2sl( item )
+    SV * item
+  PPCODE:
+    pl2sl( item );
+
+#undef  NUM_FIXED_ARGS
+#define NUM_FIXED_ARGS 1
+
+void
+sl_call_function( qualname, ... )
+    char * qualname
 
   PREINIT:
     SV **slist = NULL;
     int i, sdepth;
 
   PPCODE:
-    Printf( ("sl_call_function called:\n  namespace: %s\n  function: %s\n",
-	slns, fname ) );
+    Printf( ("sl_call_function called:\n  function: %s\n", qualname ) );
 
-    /* should we check it's a S-Lang function ? */
-    if ( 1 > SLang_is_defined(fname) ) {
-      croak( "'%s' is not a S-Lang function", fname );
+    /*
+     * We could remove this check - ie assume that if we've got this
+     * far then eveything 'should' be fine
+     */
+    if ( 1 > SLang_is_defined(qualname) ) {
+      croak( "'%s' is not a S-Lang function", qualname );
       XSRETURN_EMPTY;
     }
     Printf( ("  and it is a S-Lang function\n" ) );
@@ -190,8 +212,8 @@ sl_call_function( slns, fname, ... )
     SLang_end_arg_list ();
 
     /* perhaps should use SLexecute_function() instead */
-    if ( -1 == SLang_execute_function( fname ) ) {
-      croak( "Error: unable to execute S-lang function '%s'\n", fname );
+    if ( -1 == SLang_execute_function( qualname ) ) {
+      croak( "Error: unable to execute S-lang function '%s'\n", qualname );
       XSRETURN_EMPTY;
     }
     Printf( ("  and executed the function\n") );

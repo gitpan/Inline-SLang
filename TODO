@@ -2,23 +2,58 @@
 Tests
 -----
 
-Need to test the integer types more fully.
+- Perl Inline::SLang::Struct objects to S-Lang structs:
+    Leak memory (converting the other way seems okay [is this really
+    true/supported?])
+
+- S-Lang Assoc types to perl:
+    add support for arrays, any_type
+
+- Memory leaks:
+  Have started leak tests but it's not been comprehensive.
+
+- Need to test the integer types more fully.
 
 S-Lang to Perl
 --------------
 
+  - improve the support of 1D & 2D arrays
+  - add support for nD arrays
+
  Functions:
   - handle reference types; are there others that are needed?
 
-  - improve the support of 2D arrays
-  - add support for nD arrays
+  - binding functions
+    The BIND_NS option can be used to define the namespaces
+    to bebound (ie only those functions within these namespaces
+    will be bound). The default value is ["Global"]
+
+    Global functions are bound to the "top" level namespace
+    Other namespaces are bound to perl's <namespace>:: namespace
+    (ie S-Lang's foo->bar() becomes Perl's foo:bar()).
+
+    a) we may need to include a mapping from S-Lang namespace to
+       Perl namespace (in case of conflicts)
+    b) how to specify 'all known namespaces'? this may not be known
+       when the program is written (unlikely but possible)
 
   - do we bind intrinsic functions?
-  - do we bind functions in other namespaces, and if so how do we
-    call these functions from perl?
+    We should at least bind eval() - both because we can use it
+    and so that users can execute S-Lang code outside of the
+    normal Inline way of doing things.
+
+    Can have a compile-time argument which lists those functions
+    from the Global namespace you want binding: these would then
+    either be removed from the orig_ns array (so will be bound
+    automatically), OR we bind them separately, including adding
+    a sl_ prefix (say), or binding into a special namespace.
+
+    note: users can always write a wrapper routine which will
+    get bound to get around this issue for the moment
 
  Variables:
-  - do we want to allow access to S-Lang variables?
+  - do we want to allow access to S-Lang variables (ie have them
+    bound to a perl 'lvalue' routine)?
 
 Perl to S-Lang
 --------------
@@ -36,6 +71,34 @@ General
 
  - improve documentation
 
+ - need to find out why unable to import some modules that can
+   be imported by slsh [is this still valid?]
+
+ - do we allow users to 're-bind' the S-Lang interpreter during
+   a program: ie program loads and S-Lang is bound to Perl; user
+   does an eval in S-Lang to create a new function and wants that
+   available from Perl, so they'd want to 're-bind' things. This
+   wouldn't be automatic (too slow) so they'd have to request this.
+   And the function(s) wouldn't be available the next time the
+   script were loaded (ie not saved as part of the cached code)
+
+Compilation
+-----------
+
+If a user says
+
+  use Inline 'SLang' => <<'EOS1';
+  ..
+  EOS1
+
+  use Inline 'SLang' => <<'EOS2';
+  ..
+  EOS2
+
+perhaps with some configuration changes in between,
+do we create 2 files, and does the second one include those
+functions bound from the first code (EOS1) ?
+
 Configuration
 -------------
 
@@ -43,4 +106,7 @@ Configuration
    save the byte-compiled code instead of (or as well as) the
    text version of the code. It may provide a slight performance
    gain when loading?
+   Have decided not to try and support this, since it would mean
+   more-complicated build()/load() routines for a (I'm guessing)
+   effectively negligible speed increase
 

@@ -1,19 +1,10 @@
 #
-# test in/out of arrays
-# - also see 02arrays2[perl|slang].t for tests of
-#   the individual datatypes
-#
-# many of these tests shouldn't be direct equality
-# since it's floating point
-#
-# to do:
-# - test > 1D arrays (not yet supported)
-# - are we going to be able to test intrinsic functions like array_map() ?
+# test in/out of associative arrays
 #
 
 use strict;
 
-use Test::More tests => 23;
+use Test::More tests => 26;
 
 use Inline 'SLang';
 
@@ -35,22 +26,7 @@ sub approx ($$$) {
 
 my ( $ret1, $ret2, @ret );
 
-## 
-
-## play around with some types
-#
-# should perhaps really be in 02arrays2perl.t
-#
-
-$ret1 = array_ui(2,5);
-ok( eq_array( $ret1, [2,5] ), 'UInteger_Type converted to perl arrays' );
-$ret1 = array_chars();
-print "UChar_Type [97..99] == ", Dumper($ret1), "\n";
-ok( eq_array( $ret1, [97..99] ), 'UChar_Type converted to perl arrays' );
-$ret1 = array_longs();
-ok( eq_array( $ret1, [1000000000,21000000,-4] ), 'Long_Type converted to perl arrays' );
-
-## Associative arrays
+## S-Lang 2 perl
 
 $ret1 = assocarray_uchar();
 print "Assoc array:\n" . Dumper($ret1), "\n";
@@ -70,8 +46,17 @@ is( $$ret1{"a"},      "aa", '  key   a == "aa"' );
 is( $$ret1{"b b"},   "1.2", '  key b b == "1.2"' );
 is( $$ret1{"1"},   "[1:4]", '  key   1 == "[1:4]"' );
 
+# check we don't mess up the stack
+my $ret3;
+( $ret1, $ret2, $ret3 ) = ret_multi();
+is( $ret1, "a string",  'Returned: 1st elem = string' );
+is( ref($ret2), "HASH", 'Returned: 2nd elem = assoc array' );
+is( $$ret2{"a b q"}, 23, '  and "a b q" = 23' );
+is( $$ret2{"1"},     -4, '  and "1"     = -4' );
+is( $ret3, 22.4,        'Returned: 3rd elem = real' );
+
 TODO: {
-    todo_skip "need to handle SLANG_ARRAY_TYPE arrays???", 5;
+    todo_skip "need to handle SLANG_ARRAY_TYPE arrays", 5;
 
     $ret1 = assocarray_array();
     print "Assoc array:\n" . Dumper($ret1), "\n";
@@ -104,30 +89,19 @@ TODO: {
 
 }
 
-#TODO: {
-#	todo_skip "need to convert S-Lang assoc values to perl types", 3;
-#	
-#}
+## perl 2 S-Lang
 
-## Need to test the other types (not yet supported)
+TODO: {
+    todo_skip "Unable to convert assoc arrays to perl", 1;
+
+ok( input_assoc( { aa => 'a a', 23 => 2, "a string" => 2.3 } ),
+    "Can convert an assoc array refrence to S-Lang" );
+
+}
 
 __END__
 
 __SLang__
-
-% force the data types into "uncommon" ones
-define array_ui () {
-  variable array = UInteger_Type [_NARGS];
-  variable i;
-  for ( i=_NARGS-1; i>=0; i-- ) { % note: reverse order
-    variable var = ();
-    array[i] = var;
-  }
-  return array;
-}
-
-define array_chars () { return ['a','b','c']; }
-define array_longs () { return typecast([1e9,2.1e7,-4],Long_Type); }
 
 %% S-Lang 2 perl: associative arrays
 
@@ -163,4 +137,14 @@ define assocarray_any () {
   return foo;
 }
 
+define ret_multi() {
+  variable foo = Assoc_Type [Integer_Type];
+  foo["a b q"] = 23;
+  foo["1"]     = -4;
+  return "a string", foo, 22.4;
+}
+
+define input_assoc(x) {
+  if ( typeof(x) != Assoc_Type ) return 0;
+}
 

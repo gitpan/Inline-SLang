@@ -1,5 +1,5 @@
 Changes
-LICENCE
+LICENSE
 MANIFEST			This list of files
 MANIFEST.SKIP
 Makefile.PL
@@ -13,8 +13,12 @@ t/00init.t
 t/01scalars.t
 t/01scalars2perl.t
 t/01scalars2slang.t
-t/02arrays.t
 t/02arrays2perl.t
 t/02arrays2slang.t
+t/03assoc.t
+t/04struct.t
+t/20bind_foo.t
+t/20bind_global.t
+t/20bind_many.t
 util.c
 util.h

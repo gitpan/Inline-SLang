@@ -15,7 +15,7 @@ Inline::SLang - Write Perl subs in S-Lang.
   
   define add      (a,b) { return a + b; }
   define subtract (a,b) { return a - b; }
-  
+
   define JAxH () {
     variable type = ();
     return "Just Another " + string(type) + " Hacker!";
@@ -50,9 +50,9 @@ management, keyboard input, keymaps, and so on. The most exciting
 feature of the library is the slang interpreter that may be easily
 embedded into a program to make it extensible. 
 
-Programs using version 1.X of the S-Lang library must be distributed
-either under the terms of the GNU General Public License, or under the
-terms of the Artistic License.
+For our purposes it is the S-Lang interpreter that we are interested
+in. See the L<Term::Slang|Term::Slang> module (on CPAN) if you
+want an interface to the terminal library provided by S-Lang.
 
 =head1 Using the Inline::SLang Module
 
@@ -62,49 +62,201 @@ language, thanks to Inline's consistent look and feel.
 This section will explain the different ways to use Inline::SLang. For
 more details on C<Inline>, see 'perldoc Inline'.
 
-=head2 Importing Functions
+ ***
+ *** The following looks like it should be okay, although
+ *** comments/thoughts/suggestions are more than welcome
+ *** The mapping of S-Lang namepace to Perl package for
+ *** the functions may cause issues: perhaps namespace
+ *** 'foo' should map to package SLang::foo to make things
+ *** "cleaner"? Although this implictly creates the SLang
+ *** namespace for packages which hasn't been passed through
+ *** modules@perl.org
+ ***
 
- ***
- *** currently only user-defined functions in the 'Global' namespace
- *** are bound to Perl
- ***
+The C<info> option of L<Inline|Inline> can be useful to see
+what has (and has not) been bound to Perl. As an example
+try:
+
+  perl -MInline=INFO <<FOO
+  use Inline SLang;
+  # let's not actually do anything
+  __END__
+  __SLang__
+  variable foobar = "a string";
+  define foo()  { return foobar; }
+  define bar(x) { foobar = x; }
+  FOO
+
+The relevant part of the output (as of version 0.04 of 
+C<Inline::SLang>) is:
+
+  Configuration details
+  ---------------------
+
+  Version of S-Lang library:
+          compiled against 1.4.5
+          using            1.4.5
+
+  The following S-Lang functions have been bound to Perl:
+
+  Namespace Global contains 2 bound function(s).
+          bar()
+          foo()
+
+Note that there are no checks that a S-Lang symbol,
+when mapped to Perl, does not clobber an existing value
+(or is a Perl built-in function so can't be over-ridden).
+So I<beware> when you define a S-Lang function called 
+C<open()>!
+
+=head2 Variables
+
+We currently do not bind any variables to Perl.
+To access variables you have to write S-Lang routines
+that read/write the variable. Examples of this are 
+the C<foo()> and C<bar()> routines in the example
+above.
+
+It should not be too hard to also bind variables to Perl
+functions; this would make it easy to read, but setting
+them would (?) require making use of the I<lvalue> support
+in recent Perl's. 
+Currently it's not a very high priority issue (and may never be).
+
+=head2 Functions
 
 Using functions defined in S-Lang is just like using Perl subs. You
-just supply the source code to Inline::SLang, and then use them.
+just supply the source code to Inline::SLang - see the
+L<Inline manual|Inline> for the various ways of doing this -
+and then use them in your Perl code. For example:
 
+   # set up a S-Lang function
    use Inline SLang => <<'END';
-   define doit() {
-     ...
-   }
+   define doit() { vmessage("Printing from S-Lang"); }
    END
 
+   # now call the S-Lang function from Perl
    doit();
 
-Issues are:
+By default all S-Lang functions - other than S-Lang intrinsic
+functions (the functions defined by the S-Lang interpreter,
+such as C<array_map()> and C<assoc_get_keys()>) - in the 
+default namespace ("Global") are bound to Perl. The
+Perl functions are available in the C<main> package.
+If you want to call a S-Lang intrinsic
+function from Perl then - currently - you have to define
+a S-Lang function of your own that calls the intrinsic
+function. 
 
- - do we bind the intrinsic functions?
- - do we bind functions in namespaces other than "Global"?
-   If so, how do we access them from perl ?
-     * as namespace::function()
-     * as $object->function()
+ ***
+ *** One idea I have is to allow the user to specify a
+ *** list of S-Lang intrinsic functions that they want
+ *** to bind to Perl.
+ ***
 
-=head2 Importing Variables
+=head3 Using S-Lang functions in namespaces other than "Global"
 
-Should we bind S-Lang variables, and if so as read-only or read-write?
+Use the C<BIND_NS> configure option
+to bind functions in namespaces other than "Global".
+It takes either a string or array reference
+(of strings) listing the namespaces to use. Note that if
+you do use BIND_NS then you should probably include
+"Global" as a value!
 
-=head1 Supported Data Types
+These extra functions will be main available in the Perl
+package whose name equals that of the S-Lang namespace
+(see below for examples). One idea for the future is to
+allow a S-Lang namespace to be mapped to a Perl package
+with a different name (e.g. to get around namespace
+conflict issues). This is not too important since you 
+I<should> be able to use
+the 2-parameter forms of S-Lang's C<import> and
+C<evalfile> commands to change the name of the
+S-Lang namespace the routines are added to.
+
+=over 3
+
+=item Example - only using the namespace 'foo':
+
+ use Inline 'SLang' => Config => BIND_NS => "foo";
+ use Inline 'SLang' => <<'EOS1';
+  define fn_in_global(x) { "in global"; }
+  implements( "foo" );
+  define fn_in_foo(x) { "in foo"; }
+ EOS1
+
+ # this works
+ printf "I am in %s\n", foo::fn_in_foo("dummyval");
+
+ # this does not work since fn_in_global is not
+ # in the foo namespace
+ printf "I am in %s\n", fn_in_global("dummyval");
+
+=item Example - using multiple namespaces:
+
+ use Inline 'SLang' => Config => BIND_NS => [ "Global", "foo" ];
+ use Inline 'SLang' => <<'EOS1';
+  define fn_in_global(x) { "in global"; }
+  implements( "foo" );
+  define fn_in_foo(x) { "in foo"; }
+ EOS1
+
+ # this works
+ printf "I am in %s\n", foo::fn_in_foo("dummyval");
+
+ # as does this
+ printf "I am in %s\n", fn_in_global("dummyval");
+  
+=back
+
+=head2 Supported Data Types
 
  ***
  *** Guess what, it's not seamless at the moment!
  ***
 
-Inline::S-Lang seamlessly converts between most types of Perl and
-S-Lang data types. See the L<Inline::SLang::Types|Inline::SLang::Types>
+Inline::S-Lang attempts to seamlessly convert between 
+Perl and S-Lang data types. 
+For "simple" types - for example strings -
+where there is a direct match between S-Lang and Perl, the
+conversion is not noticeable. For more complicated
+types - such as complex numbers - S-Lang variables are
+converted to Perl objects.
+See the L<Inline::SLang::Types|Inline::SLang::Types>
 document for more information on how the various data types are
 supported.
 
 The module currently assumes that yor S-Lang library has been compiled
 with support for both floating-point and complex numbers.
+
+Note that, as of version 0.04, the support is much better
+for converting from S-Lang to Perl than the other way around.
+
+=head2 S-Lang Configuration Options
+
+For information on how to specify Inline configuration options, see
+L<Inline>. This section describes each of the configuration options
+available for S-Lang.
+
+=over 4
+
+=item BIND_NS
+
+This option - which takes either a string or a reference to
+an array of stringe - specifies what S-Lang namespaces should
+be searched for functions. The default value is "Global".
+
+Example:
+
+  # to bind to functions in the Global, foo, and bar namespaces
+  use Inline SLang => Config => BIND_NS => ["Global","foo","bar"],
+
+=back
+
+One possible option would be to allow the S-Lang code to be 
+byte-compiled, which may provide a speed-improvement when
+loading. However, the speed improvement may not be worth
+the extra effort/checks necessary in the code.
 
 =head1 SUPPORTED PLATFORMS
 
@@ -129,39 +281,20 @@ release versions rather than the development releases). It is not
 clear yet whether we really need any >= 5.6.0 functionality, but this
 restriction does make testing/developing a lot easier for me.
 
-=head2 S-Lang Configuration Options
+=head1 BUGS AND DEFICIENCIES
 
- ***
- *** Currently there are no options for S-Lang
- *** (ie only the standard Inline ones)
- ***
-
-For information on how to specify Inline configuration options, see
-L<Inline>. This section describes each of the configuration options
-available for S-Lang.
-
-One possible option would be to allow the S-Lang code to be 
-byte-compiled, which may provide a speed-improvement when loading.
+This is I<pre-alpha> release code. So, by design,
+there will be lots of bugs and deficiencies.
 
 =head1 SEE ALSO
 
-L<Inline::SLang::Types>
+L<Inline::SLang::Types>, L<Term::Slang>
 
 For information about using C<Inline>, see L<Inline>.
 
 For information about other Inline languages, see L<Inline-Support>.
 
 For information about S-Lang see C<http://www.s-lang.org/>.
-
-=head1 BUGS AND DEFICIENCIES
-
-This is I<pre-alpha> release code. So there will be lots of bugs and
-deficiencies by design...
-
-=head1 WARRANTY
-
-There is no warranty. I take no responsibility for anything that might
-happen if you try to install and/or use this module.
 
 =head1 ACKNOWLEDGEMENTS
 
@@ -172,16 +305,74 @@ L<Inline::Python> and L<Inline::Ruby> modules.
 However, please do not assume that any errors in this module are in
 any way related to the above people.
 
+=head1 CHANGES
+
+=over 4
+
+=item v0.04 Fri Mar  7 00:14:47 EST 2003
+
+Notable changes are:
+
+=over 4
+
+=item *
+
+License changed to GNU GPL and copyright holder to SAO.
+
+=item *
+
+Now binds all functions (other than S-Lang intrinsic
+functions) in the Global namespace. Added the C<BIND_NS> 
+configuration option to allow functions in other 
+namespaces to be bound as well. Use the Inline
+'-MInline=INFO' option to find out what functions
+have been bound.
+
+=item *
+
+S-Lang C<Struct_Type> variables are converted to 
+C<Inline::SLang::struct> objects. There are
+memory leaks!
+
+=item *
+
+Fixed memory leaks when converting C<Assoc_Type> 
+arrays to Perl.
+
+=item *
+
+S-Lang C<Struct_Type> variables are converted to 
+C<Inline::SLang::struct> objects.
+
+=back
+
+=item v0.03 Tue Jan 28 12:01:49 EST 2003
+
+Initial public release
+
+=back
+
 =head1 AUTHOR
 
 Doug Burke <djburke@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003, Doug Burke.
+This software is Copyright (C) 2003 
+Smithsonian Astrophysical Observatory.
+All rights are course reserved. 
 
-All Rights Reserved. This module is free software. It may be used,
-redistributed and/or modified under the same terms as Perl itself.
+It is released under the GNU General Public License.
+You may find a copy of this licence in the file 
+LICENSE within the source distribution or at 
 
-See http://www.perl.com/perl/misc/Artistic.html.
+  http://www.fsf.org/copyleft/gpl.html
+
+Prior to version 0.04 the module was distributed
+under the same terms as Perl.
+
+=head1 WARRANTY
+
+There is no warranty. Please see the GNU General Public
+License for more details.
 

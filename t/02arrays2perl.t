@@ -1,5 +1,5 @@
 #
-# test conversion of S-Lang arrays tp Perl
+# test conversion of S-Lang arrays to Perl
 #
 # many of these tests shouldn't be direct equality
 # since it's floating point
@@ -11,7 +11,7 @@
 
 use strict;
 
-use Test::More tests => 45;
+use Test::More tests => 66;
 
 use Inline 'SLang';
 
@@ -34,6 +34,7 @@ sub approx ($$$) {
 my ( $ret1, $ret2, @ret );
 
 ## S-Lang 2 perl: Integers
+
 $ret1 = arrayi2();
 is( ref($ret1), 'ARRAY', 'array int returned an array reference' );
 is( $#$ret1, 0,          '                   1 item' );
@@ -45,6 +46,16 @@ is( $$ret1[0], 3,      '                   [0] == 3' );
 is( $$ret1[1], 5,      '                   [0] == 5' );
 is( defined $ret2, '', '                   and no second item' );
 
+## S-Lang 2 perl: "uncommon" types
+
+$ret1 = array_ui(2,5);
+ok( eq_array( $ret1, [2,5] ), 'UInteger_Type converted to perl arrays' );
+$ret1 = array_chars();
+print "UChar_Type [97..99] == ", Dumper($ret1), "\n";
+ok( eq_array( $ret1, [97..99] ), 'UChar_Type converted to perl arrays' );
+$ret1 = array_longs();
+ok( eq_array( $ret1, [1000000000,21000000,-4] ), 'Long_Type converted to perl arrays' );
+
 ## S-Lang 2 perl: Reals
 $ret1 = arrayr2_1();
 approx( $$ret1[0], 2.1, 'array real [0] 2.1' );
@@ -55,6 +66,7 @@ approx( $$ret1[0], 3.2, 'array real [0] == 3.2' );
 approx( $$ret1[1], 5.4, 'array real [1] == 5.4' );
 
 ## S-Lang 2 perl: Strings
+
 $ret1 = arraystest1();
 is( $$ret1[0], "this is an array test", 'array string [0] okay' );
 
@@ -95,6 +107,41 @@ is( "$$ret1[0][0] $$ret1[0][1] $$ret1[0][2]",
 is( "$$ret1[1][0] $$ret1[1][1] $$ret1[1][2]",
     "1+i -3.5+2i 3-4i",
     "  ans[1,*] is correct (3 complex numbers)" );
+
+## S-Lang 2 perl: datatypes
+
+$ret1 = array_dtypes();
+is( ref($ret1), "ARRAY", "1D array of DataType_Type's returned as an array reference" );
+is( $#$ret1, 4, "and contains 5 elements" );
+isa_ok( $$ret1[0], "Inline::SLang::datatype" );
+isa_ok( $$ret1[1], "Inline::SLang::datatype" );
+isa_ok( $$ret1[2], "Inline::SLang::datatype" );
+isa_ok( $$ret1[3], "Inline::SLang::datatype" );
+isa_ok( $$ret1[4], "Inline::SLang::datatype" );
+is( join(" ",map { "$_" } @$ret1), "Array_Type UInteger_Type Float_Type Assoc_Type DataType_Type",
+	"The datatypes are converted correctly" );
+
+$ret1 = array_dtypes2d();
+##print Dumper($ret1), "\n";
+is( ref($ret1), "ARRAY", "2D array of data ypes returned as an array reference" );
+is( $#$ret1, 2, "and nx = 3" );
+is( $#{$$ret1[0]}, 1, "and ny = 2" );
+
+isa_ok( $$ret1[0][0], "Inline::SLang::datatype" );
+isa_ok( $$ret1[0][1], "Inline::SLang::datatype" );
+isa_ok( $$ret1[1][0], "Inline::SLang::datatype" );
+isa_ok( $$ret1[2][1], "Inline::SLang::datatype" );
+
+# stringify the values as an easy way to check the values
+is( "$$ret1[0][0] $$ret1[0][1]",
+    "String_Type Array_Type",
+    "  ans[0,*] is correct (2 datatypes)" );
+is( "$$ret1[1][0] $$ret1[1][1]",
+    "UInteger_Type Float_Type",
+    "  ans[1,*] is correct (2 datatypes)" );
+is( "$$ret1[2][0] $$ret1[2][1]",
+    "Assoc_Type DataType_Type",
+    "  ans[2,*] is correct (2 datatypes)" );
 
 ## S-Lang 2 perl: mixed types
 
@@ -138,6 +185,19 @@ __SLang__
 define arrayi2 () { return [2]; }
 define arrayi35 () { return [3,5]; }
 
+% force the data types into "uncommon" ones
+define array_ui () {
+  variable array = UInteger_Type [_NARGS];
+  variable i;
+  for ( i=_NARGS-1; i>=0; i-- ) { % note: reverse order
+    variable var = ();
+    array[i] = var;
+  }
+  return array;
+}
+define array_chars () { return ['a','b','c']; }
+define array_longs () { return typecast([1e9,2.1e7,-4],Long_Type); }
+
 % reals
 define arrayr2_1 () { return [2.1]; }
 define arrayr3_25_4 () { return [ 3.2, 5.4 ]; }
@@ -166,6 +226,16 @@ define array_cplx2d () {
   return a;
 }
 
+% datatypes
+define array_dtypes () {
+  return [ Array_Type, UInt_Type, Float_Type, Assoc_Type, DataType_Type ];
+}
+define array_dtypes2d () {
+  variable a = [ String_Type, Array_Type, UInt_Type, Float_Type, Assoc_Type, DataType_Type ];
+  reshape( a, [3,2] );
+  return a;
+}
+
 % mixed
 define array_scalar() { return ( [-3,0,42.1], "aa" ); }
 
@@ -186,40 +256,6 @@ define array2Ds() {
   variable a = ["aa","cc","x","1","this is a long string", "2"];
   reshape(a,[2,3]);
   return a;
-}
-
-%% S-Lang 2 perl: associative arrays
-
-define assocarray_uchar () {
-  variable foo = Assoc_Type [UChar_Type];
-  foo["a"]   = 1;
-  foo["b b"] = 'x';
-  foo["1"]   = 255;
-  return foo;
-}
-
-define assocarray_string () {
-  variable foo = Assoc_Type [String_Type];
-  foo["a"]   = "aa";
-  foo["b b"] = "1.2";
-  foo["1"]   = "[1:4]";
-  return foo;
-}
-
-define assocarray_array () {
-  variable foo = Assoc_Type [Array_Type];
-  foo["a"]   = [0:3];
-  foo["b b"] = foo["a"] + 1; % want to try a 2D array
-  foo["1"]   = foo["b b"] / 2.0;
-  return foo;
-}
-
-define assocarray_any () {
-  variable foo = Assoc_Type [];
-  foo["a"]   = "aa";
-  foo["b b"] = 1.2;
-  foo["1"]   = [1:4];
-  return foo;
 }
 
 %% Convert perl to S-Lang

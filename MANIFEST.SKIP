@@ -10,3 +10,5 @@ RCS
 ^SLang.(c|bs)
 ^test
 \.tar\.gz$
+^t/memtest$
+

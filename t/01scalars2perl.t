@@ -7,7 +7,7 @@
 
 use strict;
 
-use Test::More tests => 29;
+use Test::More tests => 33;
 
 use Data::Dumper;
 
@@ -117,6 +117,14 @@ is( $#ret, 1, 'num of mixed scalars == 2' );
 is( $ret[0], "aa", 'mixed scalars okay' );
 is( $ret[1], 45, 'mixed scalars okay' );
 
+@ret = scalar_45_dtype_aa();
+is( $#ret, 2, 'num of mixed scalars/datatypes == 3' );
+is( $ret[0],   45,   'mixed scalars/datatypes okay' );
+is( "$ret[1]", "DataType_Type",
+    'mixed scalars/datatypes okay' );
+is( $ret[2],   "aa", 'mixed scalars/datatypes okay' );
+
+
 ## Need to test the other types (many not yet supported)
 
 $ret1 = retnull();
@@ -151,6 +159,8 @@ define get_dtypes () {
 
 % mixed
 define scalar_aa_45() { return ( "aa", 45 ); }
+
+define scalar_45_dtype_aa() { return ( 45, DataType_Type, "aa" ); }
 
 % NULL
 define retnull() { return NULL; }

@@ -68,12 +68,13 @@ if ( defined $ENV{"ASCDS_INSTALL"} ) {
     } else {
 	# assume v >= 3.0 (and that the location hasn't changed from 3.0)
 ##	unshift @guess_path, $ENV{"ASCDS_INSTALL"};
-	unshift @guess_path, $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.5"; # ugh - missing slang.h in include/
+##	unshift @guess_path, $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.5"; # ugh - missing slang.h in include/
+	unshift @guess_path, $ENV{"ASCDS_INSTALL"} . "/ots/slang"; # ugh - missing slang.h in include/
 	print "Found CIAO $words[1] installation.\n\n";
 
 ## hack
-	$slanglib = $ENV{"ASCDS_INSTALL"} . "/lib";
-	$slanginc = $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.5/include";
+#	$slanglib = $ENV{"ASCDS_INSTALL"} . "/lib";
+#	$slanginc = $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.5/include";
     }
 } # if: defined $ASCDS_INSTALL
 
@@ -183,6 +184,8 @@ WriteMakefile(
 			    'Inline' => 0.42,
 			   }, # e.g., Module::Name => 1.1
     realclean		=> { FILES => '_Inline' },
+    ABSTRACT_FROM       => 'SLang.pod',
+    AUTHOR              => 'Doug Burke <djburke@cpan.org>',
 );
 
 sub debug_flag {
