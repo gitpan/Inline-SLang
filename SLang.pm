@@ -25,7 +25,7 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK %EXPORT_TAGS );
 
-$VERSION = '0.12';
+$VERSION = '0.20';
 @ISA = qw(Inline DynaLoader Exporter);
 
 # since using Inline we can't use the standard way
@@ -1005,11 +1005,16 @@ sub is_struct_type { 0; }
 
 package Assoc_Type;
 
-require Tie::Hash;
+## Want to use Tie::ExtraHash but this is not in Perl 5.6.0
+## and I can't find out when it was added. So we just use
+## the ExtraHash code from the 5.8.0/Tie/Hash.pm module
+##
+##require Tie::Hash;
 
 use strict;
 use vars qw( @ISA );
-@ISA = qw( Tie::ExtraHash Inline::SLang::_Type );
+##@ISA = qw( Tie::ExtraHash Inline::SLang::_Type );
+@ISA = qw( Inline::SLang::_Type );
 
 use Carp;
 
@@ -1076,6 +1081,16 @@ sub TIEHASH {
   #
   return bless [ {}, $type ], $class;
 }
+
+# the rest are from Tie::ExtraHash
+#
+sub STORE    { $_[0][0]{$_[1]} = $_[2] }
+sub FETCH    { $_[0][0]{$_[1]} }
+sub FIRSTKEY { my $a = scalar keys %{$_[0][0]}; each %{$_[0][0]} }
+sub NEXTKEY  { each %{$_[0][0]} }
+sub EXISTS   { exists $_[0][0]->{$_[1]} }
+sub DELETE   { delete $_[0][0]->{$_[1]} }
+sub CLEAR    { %{$_[0][0]} = () }
 
 #==============================================================================
 # Struct_Type
@@ -1478,9 +1493,9 @@ sub _private_define_array {
 # main) which have the name of the type and are just wrappers around
 # DataType_Type->new("type name"). So you can say
 #   Integer_Type()
-# to return an Integer_Type object. Since we do not know what the synonyms
-# for the types we can not do this for things like Int_Type (or even
-# Long_Type if has the same size as Integer_Type say)
+# to return an Integer_Type object. 
+# As of 0.12 added functions for type synonyms, such as Int_Type
+# and Float64_Type.
 #
 #==============================================================================
 

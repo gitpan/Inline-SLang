@@ -42,8 +42,5 @@ foreach my $type
     is( $ret2, $ret1, "  and the value matches S-Lang's expectations" );
 }
 
-## other type synonyms (although they may not be synonyms
-## depending on your machine)
-##
-
-$ret1
+## End
+#

@@ -61,11 +61,11 @@ been used, but then we would not be able to convert it
 back into a C<Complex_Type> variable in S-Lang (well, not
 without telling the computer this is what we wanted).
 
-I promise that soon (not many more releases after v0.12)
-the module will support
-L<the Perl Data Language (ie PDL)|PDL>,
-since it provides variables ("piddles") which retain
-type information and are optimised for numeric work.
+Version 0.20 introduces support for the
+L<the Perl Data Language (ie PDL)|PDL::Intro>;
+unfortunately the code needs some issues thrashed
+about a bit - namely handling of > 1D piddles/arrays.
+It has been released to garner user comments.
 
 =head2 Supported S-Lang Data Types
 
@@ -118,9 +118,6 @@ Array_Type
 
 Converted to one of: a Perl array reference,
 a Perl C<Array_Type> object, or a I<piddle>.
-
-Actually, the support for piddles is
-not-yet available (version 0.12).
 
 =item *
 
@@ -220,8 +217,6 @@ Piddles
 Will be be converted to a S-Lang array with datatype
 and dimensionality matching that of the Perl
 object.
-
-B<NOT YET AVAILABLE>.
 
 =item *
 
@@ -332,7 +327,8 @@ As a Perl array reference.
 
 As a piddle (if you are using the L<Perl Data Language|PDL::Intro>).
 
-This is B<NOT YET AVAILABLE>.
+As of version B<0.20> this support is definitely experimental;
+see L<Inline::SLang::Array> for more details.
 
 =item 3
 
@@ -613,6 +609,6 @@ into a Perl C<undef> value.
 =head1 SEE ALSO
 
 L<Inline::SLang::Array>, L<Inline::SLang::Assoc>, L<Inline::SLang::Struct>,
-L<Inline::SLang>, L<Math::Complex>, L<PDL>
+L<Inline::SLang>, L<Math::Complex>, L<PDL>, L<PDL::Intro>
 
 

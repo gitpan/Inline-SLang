@@ -13,4 +13,4 @@ RCS
 ^t/memtest$
 slconfig.(o|dat)$
 slconfig$
-stf.h$
+(stf|topdl|toslang).h$

@@ -68,7 +68,7 @@ is( $ret1->typeof, Struct_Type(),   "as does the type checking" );
 
 # check we play nicely with the stack
 ( $ret1, $ret2, $ret3 ) = ret_multi();
-ok( $ret1 == "more strings" && $ret3 == -234.5,
+ok( $ret1 eq "more strings" && $ret3 eq -234.5,
   "multi return: non-struct vals okay" );
 isa_ok( $ret2, "Struct_Type" );
 ok( exists $$ret2{gonzo} && !defined($$ret2{gonzo}),
@@ -128,16 +128,16 @@ ok( send3a("a string",$ret1,Float_Type()),
 #
 # looks like delete doesn't even want to work on this object anyway
 
-eval { delete $$ret1{'x'}; };
+eval 'delete $$ret1{"x"};';
 like( $@, qr/^Error: unable to delete a field from a Struct_Type structure/,
 	"can not delete the 'x' field [get an error]" );
 ok( eq_array( [keys %$ret1], [ "a", "x", "a_space" ] ),
     "can not delete the 'x' field [it still exists]" );
 
-eval { $$ret1{'foobar'}; };
+eval '$$ret1{"foobar"};';
 like( $@, qr/^Error: field 'foobar' does not exist in this Struct_Type structure/, 
 	"can not add a field [get an error]" );
-eval { $$ret1{'foobar'} = 23; };
+eval '$$ret1{"foobar"} = 23;';
 like( $@, qr/^Error: field 'foobar' does not exist in this Struct_Type structure/, 
 	"can not add a field [get an error]" );
 ok( eq_array( [keys %$ret1], [ "a", "x", "a_space" ] ),

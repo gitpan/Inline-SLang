@@ -110,6 +110,10 @@ BOOT:
       croak( "Error: Unable to create ran. num generator in _inline during initialization\n" );
 
     my_seed_val = (long int) time(NULL);
+
+    /* set up PDL - if support is compiled in */
+    INIT_PDL_CORE;
+
   }
 
 PROTOTYPES: DISABLE

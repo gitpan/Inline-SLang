@@ -262,13 +262,13 @@ source code of the module):
   define bar(x) { foobar = x; }
   FOO
 
-The relevant part of the output (as of version 0.12) is:
+The relevant part of the output (as of version 0.20) is:
 
   Configuration details
   ---------------------
 
   Version of S-Lang: 1.4.8
-  Perl module version is 0.12 with no support for PDL
+  Perl module version is 0.20 with support for PDL
 
   The following S-Lang types are recognised:
    Int32_Type UInteger_Type _IntegerP_Type

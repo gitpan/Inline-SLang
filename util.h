@@ -22,6 +22,20 @@
 
 #include "slang.h"
 
+#if I_SL_HAVE_PDL == 1
+
+#include "pdlcore.h"
+
+extern void initialize_pdl_core( void );
+
+#define INIT_PDL_CORE initialize_pdl_core()
+
+#else
+
+#define INIT_PDL_CORE
+
+#endif /* I_SL_HAVE_PDL */
+
 /* functions that are visible outside of util.c */
 void pl2sl( SV *item );
 SLtype pltype( SV *plval, int *flag );

@@ -1,4 +1,21 @@
 
+***
+*** WARNING:
+***   v0.20 adds support for the Perl Data Language (aka PDL)
+***   but it has highlighted a couple of issues that need to be
+***   thought about/worked out. Hence you may not see the
+***   rock-solid, high-quality, well-designed code that's
+***   been present in previous releases ...
+***   ... back in the real world, the PDL issues are:
+***   - 1D piddles/arrays can be used (at least on 32-bit machines)
+***   - support for other numbers of dimensions is "in a state of flux"
+***     [it does work but you might be surprised at what you get and
+***      there's no guarantee that it will remain like this].
+***   - the current system also requires that PDL (well PDL::Lite)
+***     be loaded every time Inline::SLang is loaded. This may
+***     be changed.
+***
+
 INTRODUCTION
 
 Inline::SLang -- Write Perl subroutines in S-Lang.
@@ -38,6 +55,8 @@ Perl requirements (see CPAN at http://search.cpan.org/):
   Perl v5.6.0 or higher.
   Test::More module (comes with perl 5.8.0)
   Inline module version 0.42 or higher.
+  PDL v2.4.0 or higher will be used if installed
+    [note that this version is 'nearly' released to CPAN]
 
 S-Lang requirements:
   Version 1.4.7 or higher of the S-Lang library.

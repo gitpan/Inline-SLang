@@ -5,7 +5,7 @@
 
 use strict;
 
-use Test::More tests => 95;
+use Test::More tests => 107;
 
 use Inline 'SLang' => Config => EXPORT => [ '!types' ];
 use Inline 'SLang';
@@ -28,10 +28,15 @@ sub approx ($$$) {
 
 my ( $ret1, $ret2, @ret );
 
+# use array references for ALL arrays (even if we
+# have PDL support)
+#
+Inline::SLang::sl_array2perl( 0 );
+
 ## S-Lang 2 perl
 
 $ret1 = assocarray_uchar();
-print "Assoc array:\n" . Dumper($ret1), "\n";
+#print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [UChar_Type] converted to Assoc_Type object" );
 ok( UNIVERSAL::isa($ret1,"Assoc_Type"), "  checking the same thing" );
 is( $ret1->_typeof(), UChar_Type(), "  and contains UChar_Type vars" );
@@ -83,7 +88,7 @@ ok( eq_array( [sort keys %$ret1], [sort ( "a", "foo foo" )] ),
 ok( eq_array( [keys %$ret1], [] ), "Clearing array clears the array" );
 
 $ret1 = assocarray_string();
-print "Assoc array:\n" . Dumper($ret1), "\n";
+#print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [String_Type] converted to Assoc_Array ref" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
      "   keys for assoc array are okay" );
@@ -141,23 +146,23 @@ ok( eq_array( [ keys %{ $$ret3{"a struct"} } ], [ "qq", "pp" ] ) &&
 ok( check_assoc2( $ret1, $ret2, $ret3 ), "And can convert stuff back to S-Lang" );
 
 # check using array references
-Inline::SLang::sl_array2perl( 0 );
+Inline::SLang::sl_array2perl( 1 );
 $ret1 = assocarray_array();
-print "Assoc array:\n" . Dumper($ret1), "\n";
+#print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [Array_Type] converted to Assoc_Type" );
 is( $ret1->_typeof, Array_Type(), "  and contents are Array_Type" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
     "   keys for assoc array are okay" );
 
-ok( eq_array( $$ret1{"a"},   [0,1,2,3] ),
+ok( eq_array( $$ret1{"a"}->toPerl,   [0,1,2,3] ),
     '  key   a == [0,1,2,3]' );
-ok( eq_array( $$ret1{"b b"}, [1,2,3,4] ),
+ok( eq_array( $$ret1{"b b"}->toPerl, [1,2,3,4] ),
     '  key b b == [1,2,3,4]' );
-ok( eq_array( $$ret1{"1"},   [0.5,1.0,1.5,2.0] ),
+ok( eq_array( $$ret1{"1"}->toPerl,   [0.5,1.0,1.5,2.0] ),
     '  key   1 == [1,2,3,4]/2' );
 
 $ret1 = assocarray_any1();
-print "Assoc array:\n" . Dumper($ret1), "\n";
+#print "Assoc array:\n" . Dumper($ret1), "\n";
 is( ref($ret1), "Assoc_Type", "Assoc_Array [] converted to Assoc_Type" );
 is( $ret1->_typeof, Any_Type(), "  and it contains Any_Type" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
@@ -166,8 +171,44 @@ ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
 is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
 is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
 
-ok( eq_array( $$ret1{"1"}, [1,2,3,4] ),
+ok( eq_array( $$ret1{"1"}->toPerl, [1,2,3,4] ),
     '  key   1 == [1,2,3,4]' );
+Inline::SLang::sl_array2perl( 0 );
+
+# and piddles
+SKIP: {
+    skip 'No PDL support', 12 unless Inline::SLang::sl_have_pdl();
+
+    Inline::SLang::sl_array2perl( 2 );
+    $ret1 = assocarray_array();
+    ##print "Assoc array:\n" . Dumper($ret1), "\n";
+    is( ref($ret1), "Assoc_Type", "Assoc_Array [Array_Type] converted to Assoc_Type" );
+    is( $ret1->_typeof, Array_Type(), "  and contents are Array_Type" );
+    ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+	"   keys for assoc array are okay" );
+
+    # note: we define a S-Lang routine called all below but want to use PDL's version
+    ok( PDL::all( $$ret1{"a"} == PDL::long(0,1,2,3) ),
+	'  key   a == [0,1,2,3]' );
+    ok( PDL::all( $$ret1{"b b"} == PDL::long(1,2,3,4) ),
+	'  key b b == [1,2,3,4]' );
+    ok( PDL::all( $$ret1{"1"} == PDL::double(0.5,1.0,1.5,2.0) ),
+	'  key   1 == [1,2,3,4]/2' );
+
+    $ret1 = assocarray_any1();
+    #print "Assoc array:\n" . Dumper($ret1), "\n";
+    is( ref($ret1), "Assoc_Type", "Assoc_Array [] converted to Assoc_Type" );
+    is( $ret1->_typeof, Any_Type(), "  and it contains Any_Type" );
+    ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+	"   keys for assoc array are okay" );
+
+    is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
+    is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
+
+    ok( PDL::all( $$ret1{"1"} == PDL::long(1,2,3,4) ),
+	'  key   1 == [1,2,3,4]' );
+    Inline::SLang::sl_array2perl( 0 );
+}
 
 ## check conversion of Perl hash references
 #

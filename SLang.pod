@@ -22,6 +22,13 @@ Inline::SLang - Write Perl subroutines in S-Lang.
 
 =head1 DESCRIPTION
 
+ #
+ # Version 0.20 adds support for the Perl Data Language.
+ # However the way this is implemented *AND* some details of
+ # how PDL is supported (mainly the support for non 1D arrays/piddles)
+ # is not finalised.
+ #
+
 The C<Inline::SLang> module lets you write Perl subroutines in S-Lang.
 It dynamically translates the parameters and return values into 
 native data types for both languages (or into Perl classes that are 
@@ -170,9 +177,6 @@ We list the possible values of the flag below.
 For further details on array support in C<Inline::SLang>
 see L<Inline::SLang::Array>.
 
-B<Note:> There is no PDL support as of version 0.12 of
-C<Inline::SLang>; we are getting closer to such support however.
-
 =head4 With no PDL support
 
 If PDL support was not compiled in to the module then
@@ -180,11 +184,11 @@ the flag can either be 0 or 1, where
 
 =over 3
 
-=item 0
+=item Value = B<0>
 
 All arrays are converted to a Perl array reference.
 
-=item 1
+=item Value = B<1>
 
 All arrays are converted to a Perl C<Array_Type> object
 
@@ -193,25 +197,24 @@ All arrays are converted to a Perl C<Array_Type> object
 =head4 With PDL support
 
 If PDL support is available
-- version 0.11 does not include such support -
 then there are four options:
 
 =over 3
 
-=item 0
+=item Value = B<0>
 
 All arrays are converted to a Perl array reference.
 
-=item 1
+=item Value = B<1>
 
 All arrays are converted to a Perl C<Array_Type> object
 
-=item 2
+=item Value = B<2>
 
 Numeric arrays are converted to piddles and
 non-numeric arrays are converted to a Perl array reference.
 
-=item 3
+=item Value = B<3>
 
 Numeric arrays are converted to piddles and
 non-numeric arrays are converted to a Perl C<Array_Type> object.
@@ -257,9 +260,8 @@ I<weird behaviour> (at the very least).
   ...
   some_slang_func( sl_array([[1.0,0.0],[0.0,1.0]],"Double_Type") );
 
-For numeric types I expect most people to use piddles
-(i.e. the L<Perl Data Language|PDL> support that is
-I<not yet> available). This routine is more useful for arrays of
+For numeric types I expect most people to use piddles.
+This routine is more useful for arrays of
 non-numeric data types.
 
 =head3 Inline::SLang::sl_eval
@@ -281,7 +283,7 @@ function name in Perl).
   print "S-Lang thinks 23+4 is $foo\n";
 
 A more flexible solution is to write a S-lang wrapper around
-the S-Lang C<eval()> function (perhaps this should be moved
+the S-Lang C<eval()> function (perhaps this functionality should be moved
 into C<sl_eval>?):
 
   % Call as myeval( "slang code" [, var1, var2, ... ] );
@@ -362,6 +364,41 @@ errors can be handled by using Perl's C<eval> statement.
 =head1 CHANGES
 
 =over 2
+
+=item v0.20 Wed May 21 00:37:07 EDT 2003
+
+This release begins support for the
+L<Perl Data Language|PDL::Intro> in C<Inline::SLang>.
+Please note that it is a work-in-progress.
+
+=over 2
+
+=item *
+
+requires v2.4.0 of PDL which isn't actually released
+(a fairly-recent CVS build should do the trick)
+
+=item *
+
+conversion betweed 1D arrays and piddles works
+
+=item *
+
+should 0D piddles be converted to a scalar or a 1-element 1D array?
+(currently the code croaks)
+
+=item *
+
+> 1D arrays is a mess since a 2x3 array in S-Lang maps to a
+3x2 piddle.
+The first time this happens a warning is printed to
+STDERR as a precaution. Not sure what the best approach is.
+
+=item *
+
+It has not been tested on non 32-bit machines.
+
+=back
 
 =item v0.12 Sun May 11 23:33:38 EDT 2003
 

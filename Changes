@@ -1,6 +1,27 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.20
+date:    Wed May 21 00:37:07 EDT 2003
+changes:
+
+- Support for conversion of S-Lang arrays to piddles (PDL):
+    o requires v2.4.0 of PDL which isn't actually released
+      (a fairly-recent CVS build should do the trick)
+    o conversion betweed 1D arrays and piddles works
+    o should 0D piddles be converted to a scalar or a 1-element 1D array?
+      (currently the code croaks)
+    o > 1D arrays is a mess since a 2x3 array in S-Lang maps to a
+      3x2 piddle. The first time this happens a warning is printed to
+      STDERR as a precaution. Not sure what the best approach is.
+    o it has only been tested on 32-bit machines
+
+- Remove some warnings from the test suite seen on an Alpha
+
+- Tie::ExtraHash appears to have been added to Tie::Hash after 5.6.0
+  so copy the code for this package rather than import it.
+
+--
 version: 0.12
 date:    Sun May 11 23:33:38 EDT 2003
 changes:

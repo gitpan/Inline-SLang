@@ -44,7 +44,9 @@ t/10scalars2slang.t
 t/11type_synonyms.t
 t/12arrays2perl.t
 t/12arrays2perl_atype.t
+t/12arrays2perl_pdl.t
 t/12arrays2slang.t
+t/12arrays2slang_pdl.t
 t/13assoc.t
 t/14struct.t
 util.c

@@ -46,9 +46,9 @@ other data types.
 We admit three different array representations in Perl:
 Perl's array references; as an C<Array_Type> object
 (this class is a part of the C<Inline::SLang> package);
-and as a piddle (the fundamental object of
-the L<Perl Data Language|PDL::Intro> which is the 
-suggested method to analyze large numeric arrays in Perl).
+and as a piddle - the fundamental object of
+the L<Perl Data Language|PDL::Intro> - which is the 
+suggested method to analyze large numeric arrays in Perl.
 Before discussing this I want to talk about
 going the "other way".
 
@@ -68,9 +68,11 @@ following arrays:
   Any_Type     [3]
 
 Note that this does B<not> match the way that
-PDL represents array (which would consider this
-to be a C<2x3> array). This may cause issues when
-support for piddles is added.
+PDL represents array (which considers this
+to be a C<2x3> array). As warned in earlier versions
+this is a problem now that piddles are supported.
+Please see the L<"Issues with the PDL support">
+section below.
 
 Admittedly most of these are unlikely, but the point is
 that they are all I<valid> representations, which makes
@@ -192,9 +194,8 @@ As a reference to a Perl array.
 As a piddle (see the L<Perl Data Language|PDL::Intro>
 documentation) for numeric types. 
 
-At the moment this option is NOT IMPLEMENTED. It will
-be soon, once I start thinking about the sizes of datatypes.
-What fun.
+Please see the L<"Issues with the PDL support">
+section below.
 
 =item 3
 
@@ -253,10 +254,44 @@ When run this outputs:
   Array returned as an Array_Type
     dim size = 2
     type     = Double_Type
-  Error: sl_array2perl() can only be sent an integer between 0 and 1 (inclusive) at examples/array_conversion.pl line 21.
 
-The error message is because (as of version 0.11) we do not
-support PDL. We will do soon.
+B<TO DO>: add the output from the array-as-piddle part of the
+code.
+
+=head1 Issues with the PDL support
+
+Version B<0.20> of C<Inline::SLang> adds support for
+the L<Perl Data Language|PDL>. Unfortunately this support
+is still a work in progress.
+
+=over 2
+
+=item *
+
+1D piddles and S-Lang arrays should work properly.
+
+=item *
+
+Conversion of > 1D arrays/piddles is I<complicated>
+because what to S-Lang is a 2x3 array is, to PDL,
+a 3x2 array!
+
+Currently the arrays are converted like this (ie the
+order of the arrays is swapped). I do B<not>
+think this a good long-term solution. Have I<you> any
+ideas?
+
+=item *
+
+0-dimension piddles are not converted to S-Lang, since
+S-Lang does not allow such an array. We could convert the
+piddle to a scalar or a single-element array.
+
+=item *
+
+It has only been tested on 32-bit machines.
+
+=back
 
 =head1 THE ARRAY_TYPE CLASS
 
@@ -394,7 +429,7 @@ Further methods could be added to improve the array access -
 such as the C<resize> S-Lang function and means of accessing array
 slices - but this is unlikely to happen since PDL has a
 I<much> richer set of operations (although they only work for
-numeric types) or you can do the array processing in S-Lang.
+numeric types), or you can do the array processing in S-Lang.
 
 =head1 SEE ALSO
 

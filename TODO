@@ -3,6 +3,54 @@ This file contains random musings on the past, present, and future
 state of Inline::SLang. Just because an item has made it here does not
 mean it is going to be worked on in the near (or far) future.
 
+PDL Support
+-----------
+
+- piddles <-> S-Lang arrays for > 1D: how to handle the fact that
+  S-Lang 2x3 is 3x2 to PDL:
+
+  o easy/quick
+    do this conversion (just swap the dimension order during the conversion
+    and leave everything else the same). Not nice if have associated data -
+    eg WCS or other FITS header information.
+
+  o keep 2x3 as 2x3
+    slower/more awkward as prob would want to swap the data points
+    when copying over, rather than just doing a single memcpy() call.
+
+- Should we convert 0D piddles to S-Lang scalars or 1D, 1-element arrays?
+
+- need to test on a 64-bit machine to check that the assumptions I've made
+  about sizes of the various types is sensible. Or improve the code that
+  compares PDL and S-Lang datatype sizes.
+
+Other data types
+----------------
+
+- Structs: need to improve checking of valid field names in Perl
+  eg in Perl can use 1x3, but this is not a valid field name in S-Lang
+
+Configuration
+-------------
+
+- The PDL code code be conditionally loaded by Inline::SLang - either
+  via "use Inline::SLang => Config => PDL => 1;" or a separate
+  "Use Inline::SLang::PDL;". Inline::Slang would have a struct (like
+  PDL's Core struct) with function pointers set to NULL. When the PDL
+  support is loaded these get set to the necessary code to convert
+  from/to piddles.
+  
+  The question is, is having PDL support in Inline::SLang proper that
+  much of a pain?
+
+- S-Lang has support for byte-compiled code. The module could
+  save the byte-compiled code instead of (or as well as) the
+  text version of the code. It may provide a slight performance
+  gain when loading?
+  Have decided not to try and support this, since it would mean
+  more-complicated build()/load() routines for a (I'm guessing)
+  effectively negligible speed increase
+
 Tests
 -----
 
@@ -10,40 +58,26 @@ Tests
   S-Lang still exist once the perl variable that referenced them
   has called it's DESTROY method.
 
-S-Lang to Perl
---------------
-
-  - use PDL
-
-  - Structs: need to improve checking of valid field names in Perl
-    eg in Perl can use 1x3, but this is not a valid field name in S-Lang
-
- Variables:
-  - do we want to allow access to S-Lang variables (ie have them
-    bound to a perl 'lvalue' routine)?
-
-Perl to S-Lang
---------------
-
 General
 -------
 
- - need some way to find out the sizes of the various data types
-   (particularly for when we add piddle support)
+- need some way to find out the sizes of the various data types
+  (particularly for when we add piddle support)
 
- - some code might be easier if we use dup() to copy the item
-   on the S-Lang stack - so can still pop it off later
+- *could* steal the PDL::NiceSlice ipproach and provide a syntax
+  to access Perl versions of S-lang's arrays/structs - eg
+    $a(0,2,1) gets translated to $a->get(0,2,3)
+    $b.foo                       $$b{foo}
+  BUT this is
+    hard
+    going to clash with PDL
+    going to clash with Perl 6
 
- - *could* steal the PDL::NiceSlice array and provide a syntax
-   to access Perl versions of S-lang's arrays/structs - eg
-     $a(0,2,1) gets translated to $a->get(0,2,3)
-     $b.foo                       $$b{foo}
-   BUT this is
-     hard
-     going to clash with PDL
-     going to clash with Perl 6
+- improve documentation
 
- - improve documentation
+Variables:
+ - do we want to allow access to S-Lang variables (ie have them
+   bound to a perl 'lvalue' routine)?
 
 Compilation
 -----------
@@ -61,15 +95,4 @@ If a user says
 perhaps with some configuration changes in between,
 do we create 2 files, and does the second one include those
 functions bound from the first code (EOS1) ?
-
-Configuration
--------------
-
- - S-Lang has support for byte-compiled code. The module could
-   save the byte-compiled code instead of (or as well as) the
-   text version of the code. It may provide a slight performance
-   gain when loading?
-   Have decided not to try and support this, since it would mean
-   more-complicated build()/load() routines for a (I'm guessing)
-   effectively negligible speed increase
 

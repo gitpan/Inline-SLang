@@ -1,88 +1,89 @@
+# -*-perl-*-
 #
-# test conversion of Perl arrays to S-Lang
+# test conversion of piddles to S-Lang
 #
 # many of these tests shouldn't be direct equality
 # since it's floating point
 #
+# testing > 1D arrays is a pain at the moment since I haven't decided
+# how to handle the fact that in S-Lang it's 2x3 but to PDL it's 3x2
+#
 
 use strict;
-
-use Test::More tests => 136;
 
 # we implicitly test support for !types here
 use Inline 'SLang' => Config => EXPORT => [ qw( sl_array !types ) ];
 use Inline 'SLang';
 
-use Data::Dumper;
+use constant NTESTS => 19;
+use Test::More tests => NTESTS;
 
-# check for approximately equal
-# - for these operations an absolute tolerance is okay
-#
-# really want to be able to test arrays easily
-#
-use constant ABSTOL => 1.0e-10;
-sub approx ($$$) {
-    my ( $a, $b, $text ) = @_;
-    my $delta = $a-$b;
-    ok( abs($delta) < ABSTOL, "$text [delta=$delta]" );
-}
+SKIP: {
+    skip 'PDL support is not available', NTESTS
+      unless Inline::SLang::sl_have_pdl();
 
-## Tests
+    eval "use PDL;";
 
-my ( $ret1, $ret2, $ret3, $ret4, @ret );
+    ##use Data::Dumper;
 
-## test Array_Type object
-$ret1 = Array_Type->new( "Int_Type", [3] );
-ok( defined $ret1, "Array_Type->new returned something" );
-isa_ok( $ret1, "Inline::SLang::_Type" );
-isa_ok( $ret1, "Array_Type" );
+    ## Tests
 
-ok( !$ret1->is_struct_type, "And it's not a struct!" );
+    my ( $pdl, $ret1, $ret2, $ret3, $ret4, @ret );
 
-$ret2 = $ret1->typeof();
-isa_ok( $ret2, "DataType_Type" );
-is( "$ret2", "Array_Type", "typeof() returned Array_Type" );
+    # Can we send simple 1D arrays to S-Lang?
+    my $val = [20];
+    my $dim = [1];
+    ok( isa_array(byte($val),$dim,UChar_Type()),    "Can convert byte to a 1D S-Lang array" );
+    ok( isa_array(short($val),$dim,Short_Type()),   "Can convert short to a 1D S-Lang array" );
+    ok( isa_array(ushort($val),$dim,UShort_Type()), "Can convert ushort to a 1D S-Lang array" );
+    ok( isa_array(long($val),$dim,Int_Type()),      "Can convert long to a 1D S-Lang array" );
+    ok( isa_array(float($val),$dim,Float_Type()),   "Can convert float to a 1D S-Lang array" );
+    ok( isa_array(double($val),$dim,Double_Type()), "Can convert double to 1D a S-Lang array" );
 
-$ret2 = $ret1->_typeof();
-isa_ok( $ret2, "DataType_Type" );
-is( "$ret2", "Integer_Type", "_typeof() returned Integer_Type" );
+    # Can we send simple 6D arrays to S-Lang?
+    # - can't do 7D since there's a problem with 7D arrays in v1.4.9
+    $val = [[[[[[20]]]]]];
+    $dim = [1,1,1,1,1,1];
+    ok( isa_array(byte($val),$dim,UChar_Type()),    "Can convert byte to a 6D S-Lang array" );
+    ok( isa_array(short($val),$dim,Short_Type()),   "Can convert short to a 6D S-Lang array" );
+    ok( isa_array(ushort($val),$dim,UShort_Type()), "Can convert ushort to a 6D S-Lang array" );
+    ok( isa_array(long($val),$dim,Int_Type()),      "Can convert long to a 6D S-Lang array" );
+    ok( isa_array(float($val),$dim,Float_Type()),   "Can convert float to a 6D S-Lang array" );
+    ok( isa_array(double($val),$dim,Double_Type()), "Can convert double to a 6D S-Lang array" );
 
-( $ret2, $ret3, $ret4 ) = $ret1->array_info();
-is( ref($ret2), "ARRAY", "array_info() returns dim array as a Perl array ref" );
-is( $ret3, 1, "  and reports ndims=1" );
-is( $$ret2[0], 3, "  and nelem=3" );
-isa_ok( $ret4, "DataType_Type" );
-is( "$ret4", "Integer_Type", "  and the type is Integer_Type" );
+    # guess we should check the values get converted correctly
+    $val = byte(1,2,3,128,255,256);
+    ok( check_byte1d($val), "1D byte vals okay" );
+    $val = short(-2,-1,0,1,2);
+    ok( check_short1d($val), "1D short vals okay" );
+    # too lazy to find out what the max value of a short is
+    $val = ushort(2,1,0,1,2);
+    ok( check_ushort1d($val), "1D ushort vals okay" );
+    $val = long(-3,-16,0,1,2);
+    ok( check_long1d($val), "1D long vals okay" );
+    $val = (sequence(float(),10)-5)/2.0;
+    ok( check_float1d($val), "1D float vals okay" );
+    $val = (sequence(float(),10)-5)/2.0;
+    ok( check_float1d($val), "1D float vals okay" );
+    $val = (sequence(10)-5)/2.0;
+    ok( check_dble1d($val), "1D double vals okay" );
 
-# check that changing $ret2 doesn't change the object
-$$ret2[0] = 23;
-( $ret3 ) = $ret1->array_info();
-is( $$ret3[0], 3, "dim array returned by array_info() is a copy of internal structure" );
+=begin nDARRAYSAREPAINFUL
 
-ok( !defined $ret1->get(0) &&
-    !defined $ret1->get(1) &&
-    !defined $ret1->get(2), "elem0,1,2 = undef" );
-is( $ret1->set(1,23), 23, "set(1,23) returned 23" );
-ok( $ret1->get(1) == 23 && !defined $ret1->get(0) && !defined $ret1->get(2),
-    "  and it set elem 1, leaving 0,2 alone" );
-$ret1->set(0,1);
-$ret1->set(2,-5);
+    $val = cat( byte(1,2,3), byte(128,255,256) );
+    ok( check_byte2d($val), "2D byte vals okay" );
+    $val = ones(short(),4,2)->xvals;
+    ok( check_short2d($val), "2D short vals okay" );
+    $val = sequence(2,4);
+    ok( check_dble2d($val), "2D double vals okay" );
 
-# set() uses the same code so we don't need to test that too
-ok( $ret1->get(-3) == 1 && $ret1->get(-2) == 23 && $ret1->get(-1) == -5,
-    "Can use get() with negative indices" );
-$ret1->set(-1, -10);
+=end nDARRAYSAREPAINFUL
 
-# check get/set when sent invalid arguments
-eval { $ret1->get(5); };
-like( $@, qr/^Error: coord #0 of get\(\) call \(val=5\) lies outside valid range of -3:2/,
-	"Can not access invalid element (>=nelem)" );
-eval { $ret1->get(-4); };
-like( $@, qr/^Error: coord #0 of get\(\) call \(val=-4\) lies outside valid range of -3:2/,
-	"Can not access invalid element (<-nelem)" );
-eval { $ret1->get(1,2,3); };
-like( $@, qr/^Error: get\(\) called with 3 coordinates but array dimensionality is 1/,
-	"Can not access invalid element (3-dimensional coordinate)" );
+=cut
+
+} # SKIP
+
+=begin OLDCODE
 
 # can we send this to S-Lang?
 ok( isa_array($ret1), "Can convert Array_Type to a S-Lang array" );
@@ -264,27 +265,6 @@ is( check_array($ret1,Integer_Type(),6,1,1,1,1,1,1), 1,
     "  and it seems to have the correct info" );
 ok( check_arrayref_int6d($ret1), "  and the right values" );
 
-# TODO doesn't seem to be understood properly by my test alpha
-# machine running perl5.6.0 and some set of Test modules
-#
-
-=begin SOMEWAYOFF
-
-TODO: {
-	todo_skip "need clever type-checking of array refs", 3;
-
-	$ret1 = [-9,"foo",23.0,Math::Complex->new(4,-3),Struct_Type()];
-	ok( isa_array($ret1), "Can convert an array ref to a S-Lang array" );
-	print "Array reference: ", Dumper($ret1), "\n";
-	is( check_array($ret1,Any_Type(),1,5), 1,
-	    "  and it seems to have the correct info" );
-	ok( check_arrayref_any1d($ret1), "  and the right values" );
-}
-
-=end SOMEWAYOFF
-
-=cut
-
 # stack checks when sent array references
 # - note: use simple arrays only for now
 $ret1 = Inline::SLang::sl_array( [1.1,2.2,-43.2], [3], "Double_Type" );
@@ -403,6 +383,10 @@ is( sumup_nelems( [0],
 is( sumup_nelems( [0], [ ["a", "b"], ["cc", "d"] ], [3.4, 5.6, 9.4, 55] ),
     9, "able to add up 1D + 2D elements [array ref]" );
 
+=end OLDCODE
+
+=cut
+
 __END__
 __SLang__
 
@@ -414,13 +398,83 @@ define all(x) {
   ( dims, ndims, ) = array_info(x);
   nelem = 1;
   foreach ( dims ) { variable y = (); nelem *= y; }
-  return sum(x!=0) == nelem; 
+  return sum(x!=0) == nelem;
 }
 define any(x) { return sum(x!=0) != 0; }
 
-%% Convert perl to S-Lang
+define isa_array(a,dims,type) {
+    if (
+	andelse
+	{ typeof(a) == Array_Type }
+	{ _typeof(a) == type }
+       ) {
+	variable adims;
+	( adims, , ) = array_info(a);
+	return all( adims == dims );
+    }
+    return 0;
+}
 
-define isa_array(a) { return typeof(a) == Array_Type; }
+define check_byte1d(in) {
+  if ( _typeof(in) != UChar_Type ) return 0;
+  variable out = typecast( [1,2,3,128,255,0], UChar_Type );
+  return all( in == out );
+}
+
+define check_short1d(in) {
+  if ( _typeof(in) != Short_Type ) return 0;
+  variable out = typecast( [-2,-1,0,1,2], Short_Type );
+  return all( in == out );
+}
+
+define check_ushort1d(in) {
+  if ( _typeof(in) != UShort_Type ) return 0;
+  variable out = typecast( [2,1,0,1,2], UShort_Type );
+  return all( in == out );
+}
+
+define check_long1d(in) {
+  if ( _typeof(in) != Integer_Type ) return 0;
+  variable out = typecast( [-3,-16,0,1,2], Integer_Type );
+  return all( in == out );
+}
+
+define check_float1d(in) {
+  if ( _typeof(in) != Float_Type ) return 0;
+  variable out = typecast( [-5:4]/2.0, Float_Type );
+  return all( in == out );
+}
+
+define check_dble1d(in) {
+  if ( _typeof(in) != Double_Type ) return 0;
+  variable out = typecast( [-5:4]/2.0, Double_Type );
+  return all( in == out );
+}
+
+define check_byte2d(in) {
+  if ( _typeof(in) != UChar_Type ) return 0;
+  variable out = UChar_Type [3,2];
+  out[*,0] = [1,2,3];
+  out[*,1] = [128,255,0];
+  return all( in == out );
+}
+
+define check_short2d(in) {
+  if ( _typeof(in) != Short_Type ) return 0;
+  variable out = Short_Type [4,2];
+  out[*,0] = [0,1,2,3];
+  out[*,1] = out[*,0];
+  return all( in == out );
+}
+
+define check_dble2d(in) {
+  if ( _typeof(in) != Double_Type ) return 0;
+  variable out = typecast([0:7],Double_Type);
+  reshape(out,[2,4]);
+  return all( in == out );
+}
+
+% OLD
 
 define check_array() {
   variable a, itype, ndims, size;
