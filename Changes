@@ -1,6 +1,15 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.25
+date:    Tue Apr 13 22:56:06 EDT 2004
+changes:
+
+- Another one-line fix and we have PDL support working on OS-X.
+  PDL support is now on by default during building (that is if PDL
+  is available).
+
+--
 version: 0.24
 date:    Tue Apr 13 22:16:12 EDT 2004
 changes:

@@ -6,10 +6,6 @@ mean it is going to be worked on in the near (or far) future.
 PDL Support
 -----------
 
-- Conversion of S-Lang arrays to piddles fails on OS-X; need to
-  investigate the assumptions in topdl.h (could be a symptom of the
-  following point).
-
 - need to test on a 64-bit machine to check that the assumptions I've made
   about sizes of the various types is sensible. Or improve the code that
   compares PDL and S-Lang datatype sizes.

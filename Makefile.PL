@@ -17,11 +17,6 @@
 #       not sensible as I'm reluctant to cash many results)
 #    b) Other parts of the code still contain UNIX-isms
 #
-# for version 0.24 PDL support is available by default [if PDL is
-# installed] on Solaris and Linux systems only. There is a problem
-# converting S-Lang arrays to piddles on OS-X, so PDL support is of by
-# default on OS-X machines.
-#
 
 eval { "require 5.6.0" } or die <<EOD;
 ############
@@ -97,6 +92,7 @@ sub parse_slconfig () {
 	unless ( exists $sl_sizes{$base} ) {
 	    my $size = $synonym;
 	    $size =~ s/[^\d]+//g;
+	    next unless $size;
 	    ##print "size: synonym $synonym -> $size\n";
 	    $sl_sizes{$base} = $size / 8;
 	}
@@ -169,7 +165,7 @@ EOW
 
 PLEASE NOTE:
   Found PDL >= 2.4.0 but I should warn you that ...
-  PDL support is currently experimental. As of 0.21 of Inline::SLang
+  PDL support is currently experimental. As of 0.25 of Inline::SLang
   1D arrays/piddles convert okay on 32-bit machines (no testing done on
   64-bit machines). 2D - and higher - arrays/piddles will be converted
   *BUT* are unlikely to do what you expect. 0D piddles just croak.
@@ -324,8 +320,6 @@ my $slangdir = "";
 my $slanglib = "";
 my $slanginc = "";
 my $pdl = 1;
-# dbg: PDL support is not yet rock solid
-$pdl = $^O eq "linux" || $^O eq "solaris" || 0;
 my $wall = 0;
 
 ## Search path for the S-Lang library
@@ -699,7 +693,7 @@ Options:
    otherwise the following directories are searched:
 $paths
   PDL support:
-    --pdl     Turn on support for PDL if installed
+    --pdl     Turn on support for PDL if installed (default)
     --nopdl   Turn off support for PDL
 
   debugging:
