@@ -1,0 +1,187 @@
+=head1 NAME
+
+Inline::SLang - Write Perl subs in S-Lang.
+
+=head1 SYNOPSIS
+
+  print "9 + 16 = ", add(9,16), "\n";
+  print "9 - 16 = ", subtract(9,16), "\n";
+  print JAxH('Inline'), "\n";
+  
+  use Inline SLang;
+  
+  __END__
+  __SLang__
+  
+  define add      (a,b) { return a + b; }
+  define subtract (a,b) { return a - b; }
+  
+  define JAxH () {
+    variable type = ();
+    return "Just Another " + string(type) + " Hacker!";
+  }
+
+=head1 DESCRIPTION
+
+ ***
+ *** This is currently a pre alpha release.
+ *** Use at your own risk
+ ***
+
+The C<Inline::SLang> module allows you to put S-Lang source code
+directly "inline" in a Perl script or module. It sets up an in-process
+S-Lang interpreter, runs your code, and then examines the
+interpreter's symbol table, looking for things to bind to Perl.
+
+The process of interrogating the S-Lang interpreter only occurs the
+first time you run your S-Lang code. The namespaces are cached, and
+subsequent calls use the cached version. Of course, your S-Lang code
+must still be run every time your run the Perl script -- but
+Inline::S-Lang already knows the results of running it.
+
+=head1 What is S-Lang?
+
+From the S-Lang library home page at http://www.s-lang.org/
+
+S-Lang is a multi-platform programmer's library designed to allow a
+developer to create robust multi-platform software. It provides
+facilities required by interactive applications such as display/screen
+management, keyboard input, keymaps, and so on. The most exciting
+feature of the library is the slang interpreter that may be easily
+embedded into a program to make it extensible. 
+
+Programs using version 1.X of the S-Lang library must be distributed
+either under the terms of the GNU General Public License, or under the
+terms of the Artistic License.
+
+=head1 Using the Inline::SLang Module
+
+Using Inline::SLang will seem very similar to using any other Inline
+language, thanks to Inline's consistent look and feel.
+
+This section will explain the different ways to use Inline::SLang. For
+more details on C<Inline>, see 'perldoc Inline'.
+
+=head2 Importing Functions
+
+ ***
+ *** currently only user-defined functions in the 'Global' namespace
+ *** are bound to Perl
+ ***
+
+Using functions defined in S-Lang is just like using Perl subs. You
+just supply the source code to Inline::SLang, and then use them.
+
+   use Inline SLang => <<'END';
+   define doit() {
+     ...
+   }
+   END
+
+   doit();
+
+Issues are:
+
+ - do we bind the intrinsic functions?
+ - do we bind functions in namespaces other than "Global"?
+   If so, how do we access them from perl ?
+     * as namespace::function()
+     * as $object->function()
+
+=head2 Importing Variables
+
+Should we bind S-Lang variables, and if so as read-only or read-write?
+
+=head1 Supported Data Types
+
+ ***
+ *** Guess what, it's not seamless at the moment!
+ ***
+
+Inline::S-Lang seamlessly converts between most types of Perl and
+S-Lang data types. See the L<Inline::SLang::Types|Inline::SLang::Types>
+document for more information on how the various data types are
+supported.
+
+The module currently assumes that yor S-Lang library has been compiled
+with support for both floating-point and complex numbers.
+
+=head1 SUPPORTED PLATFORMS
+
+ ***
+ *** requirements not yet fixed in stone
+ ***
+
+The module is designed to work with version 1.4.x of the S-Lang
+library, although I make no promises for anything earlier than 1.4.4.
+
+S-Lang versions tested: 1.4.0 (linux), 1.4.4 (solaris),
+1.4.7 (linux & solaris)
+
+Inline::S-Lang has so far been tested on Linux and Solaris 2.8
+only. It should work on UNIX platforms; I would be surprised if 
+it works without tweaking on other systems.
+
+Perl versions tested: 5.6.1 (solaris), 5.8.0 (linux)
+
+It is intended to support Perl versions >= 5.6.0 only (at least the
+release versions rather than the development releases). It is not
+clear yet whether we really need any >= 5.6.0 functionality, but this
+restriction does make testing/developing a lot easier for me.
+
+=head2 S-Lang Configuration Options
+
+ ***
+ *** Currently there are no options for S-Lang
+ *** (ie only the standard Inline ones)
+ ***
+
+For information on how to specify Inline configuration options, see
+L<Inline>. This section describes each of the configuration options
+available for S-Lang.
+
+One possible option would be to allow the S-Lang code to be 
+byte-compiled, which may provide a speed-improvement when loading.
+
+=head1 SEE ALSO
+
+L<Inline::SLang::Types>
+
+For information about using C<Inline>, see L<Inline>.
+
+For information about other Inline languages, see L<Inline-Support>.
+
+For information about S-Lang see C<http://www.s-lang.org/>.
+
+=head1 BUGS AND DEFICIENCIES
+
+This is I<pre-alpha> release code. So there will be lots of bugs and
+deficiencies by design...
+
+=head1 WARRANTY
+
+There is no warranty. I take no responsibility for anything that might
+happen if you try to install and/or use this module.
+
+=head1 ACKNOWLEDGEMENTS
+
+John Davis (for S-Lang), Brian Ingerson (for the Inline framework),
+and Neil Watkiss since I stole virtually everything from his
+L<Inline::Python> and L<Inline::Ruby> modules.
+
+However, please do not assume that any errors in this module are in
+any way related to the above people.
+
+=head1 AUTHOR
+
+Doug Burke <djburke@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2003, Doug Burke.
+
+All Rights Reserved. This module is free software. It may be used,
+redistributed and/or modified under the same terms as Perl itself.
+
+See http://www.perl.com/perl/misc/Artistic.html.
+

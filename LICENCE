@@ -1,0 +1,13 @@
+LICENCE INFORMATION
+-------------------
+
+The Inline::SLang Perl module is released under the same terms as Perl
+itself. Please see the "README" file in the Perl distribution for more
+details. The Inline::SLang module is designed to be linked against
+version 1.X of the S-Lang library; please note the following, taken
+from the S-Lang homepage at http://www.s-lang.org/
+
+Programs using version 1.X of the S-Lang library must be distributed
+either under the terms of the GNU General Public License, or under the
+terms of the Artistic License.
+

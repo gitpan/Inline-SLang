@@ -1,0 +1,46 @@
+
+Tests
+-----
+
+Need to test the integer types more fully.
+
+S-Lang to Perl
+--------------
+
+ Functions:
+  - handle reference types; are there others that are needed?
+
+  - improve the support of 2D arrays
+  - add support for nD arrays
+
+  - do we bind intrinsic functions?
+  - do we bind functions in other namespaces, and if so how do we
+    call these functions from perl?
+
+ Variables:
+  - do we want to allow access to S-Lang variables?
+
+Perl to S-Lang
+--------------
+
+ - most of it needs to be done!
+
+General
+-------
+
+ - decide how to handle errors.
+
+ - how do we support PDL? Should there be an option to convert
+   arrays using one of:
+     plain perl, return as a single 'string', as a piddle
+
+ - improve documentation
+
+Configuration
+-------------
+
+ - S-Lang has support for byte-compiled code. The module could
+   save the byte-compiled code instead of (or as well as) the
+   text version of the code. It may provide a slight performance
+   gain when loading?
+

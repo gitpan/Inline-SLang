@@ -1,0 +1,20 @@
+Changes
+LICENCE
+MANIFEST			This list of files
+MANIFEST.SKIP
+Makefile.PL
+README
+SLang.pm
+SLang.pod
+SLang.xs
+SLang/Types.pod
+TODO
+t/00init.t
+t/01scalars.t
+t/01scalars2perl.t
+t/01scalars2slang.t
+t/02arrays.t
+t/02arrays2perl.t
+t/02arrays2slang.t
+util.c
+util.h

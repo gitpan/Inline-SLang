@@ -1,0 +1,88 @@
+
+***
+*** Please note that this is a pre-alpha release intended to
+*** garner comments, feed-back, and code.
+***
+*** There is no guarantee that the API/approach will not change
+*** or that this code works, does something useful, or doesn't do
+*** anything horrible to your system. Caveat downloader...
+***
+
+INTRODUCTION
+
+Inline::SLang -- Write Perl subs in S-Lang.
+
+Inline::SLang lets you write Perl subroutines in S-Lang. It dynamically 
+translates the parameters and return values into native data types for 
+both languages.
+
+From the S-Lang library home page at http://www.s-lang.org/
+
+S-Lang is a multi-platform programmer's library designed to allow a
+developer to create robust multi-platform software. It provides
+facilities required by interactive applications such as display/screen
+management, keyboard input, keymaps, and so on. The most exciting
+feature of the library is the slang interpreter that may be easily
+embedded into a program to make it extensible. 
+
+Example:
+
+   use Inline SLang => <<'END';
+   define JAxH(x) {
+     () = printf( "Just Another %s Hacker", x );
+   }
+   END
+   print JAxH('Inline'), "\n";
+
+When run, this complete program prints:
+
+   Just Another Inline Hacker
+
+==============================================================================
+
+INSTALLATION
+
+This module probably requires Inline.pm version 0.42 or higher to be 
+installed. In addition, you need S-Lang library v1.4.0 or greater installed;
+the development of this module is being done mainly against 1.4.4 - as
+distributed with CIAO 2.3 - and 1.4.7 (will upgrade to 1.4.8 soon).
+
+Currently I assume that S-Lang has been compiled with support for
+floating-point and complex numbers.
+
+For the moment I am also making use of the Test::More module for testing.
+I believe this is only a part of Perl since version 5.8.0, so you may need 
+to download it from CPAN (http://search.cpan.org/).
+
+To install Inline::SLang do this:
+
+$ perl Makefile.PL
+$ make
+$ make test
+$ make install
+
+For configuration options, enter
+
+$ perl Makefile.PL -help
+
+The main options of interest are -slangdir or -slanglib/inc to specify
+the location of the library and its include file. The program looks in
+/usr, /usr/local, and - if installed - the ots directory within the
+CIAO directory structure (http:://cxc.harvard.edu/ciao/).
+
+This has only been tested in UNIX (Linux and Solaris) environments.
+
+Note that you have to 'make install' before you can run it successfully.
+
+==============================================================================
+
+INFORMATION
+
+- For more information on Inline::SLang see 'perldoc Inline::SLang'
+- For more information about Inline.pm, see 'perldoc Inline'
+- For information on SLang visit http://www.s-lang.org/
+- For copyright information see the LICENCE file in this distribution
+
+Please send questions and comments to "Doug Burke" <djburke@cpan.org>
+
+Copyright (c) 2003, Doug Burke. All Rights Reserved.

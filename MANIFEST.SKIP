@@ -1,0 +1,12 @@
+Makefile$
+Makefile\.old$
+MANIFEST\.bak$
+^blib
+pm_to_blib
+RCS
+^_Inline
+\.o$
+~$
+^SLang.(c|bs)
+^test
+\.tar\.gz$

@@ -1,0 +1,277 @@
+=head1 NAME
+
+Inline::SLang::Types - Support for S-Lang types
+
+=head1 SYNOPSIS
+
+  use Inline SLang;
+  use Math::Complex;
+
+  # $val is a Math::Complex object after this call
+  my $val = makecplx();
+  print "Perl has been sent $val\n";
+  # note: the multiplication is done using Math::Complex
+  printcplx( $val * cplx(0,1) );
+
+  my $type = typecplx($val);
+  print "And the S-Lang datatype is $type\n";
+  print "        Perl               " .  ref($type) . "\n";
+
+  __END__
+  __SLang__
+
+  define makecplx() { return 3 + 4i; }
+  define printcplx(cval) {
+    () = printf( "S-Lang has been sent %s\n", string(cval) );
+  }
+  define typecplx(cval) { return typeof(cval); }
+
+=head1 DESCRIPTION
+
+ ***
+ *** This is currently a pre alpha release.
+ *** Use at your own risk
+ ***
+
+The aim is to allow a user to program "naturally" in Perl
+and S-Lang, and so native data types are used wherever
+possible. However, objects are used when necessary
+(for some un-defined definition of necessary) to preserve type
+information. As an example, consider swapping a complex
+number between S-Lang and Perl. In S-Lang it would be represented
+as a C<Complex_Type> and in Perl we choose to use a
+C<Math::Complex> object. Something simple - such as
+an array reference containing two elements - could have
+been used, but then we would not be able to convert it
+back into a C<Complex_Type> in S-Lang.
+
+An alternative is to use L<the Perl Data Language (ie PDL)|PDL>,
+since it provides variables ("piddles") which retain
+type information and are optimised for numeric work.
+Support for PDL is planned (once the initial kinks of the
+perl interface have been worked out)
+but currently not implemented (as of v0.03)
+
+=head2 Handling numeric arrays
+
+Currently S-Lang arrays are converted to Perl array references
+(as discussed below). This is fine for strings (and is the
+obvious representation), and does allow easy access to the
+data. However, for numeric arrays it's not the most
+efficient and presents issues when converting Perl to S-Lang
+data [ie one would have to loop through the entire array to
+work out what S-Lang datatype and dimensionality/sizes to use].
+Perhaps we should use a reference to a scalar as done
+in L<Astro::FITS::CFITSIO|/Astro::FITS::CFITSIO>, but this 
+approach has it's own issues (how do we find out the 
+size of the array?).
+
+I am tempted to use array references and then force users
+to use L<PDL|/PDL> if they want efficiency.
+
+=head2 Supported Perl Data Types
+
+ ***
+ *** NOTE: actually, for unsupported types we currently die
+ ***
+
+The following data types may be passed from Perl into S-Lang. Any
+unrecognized type is replaced with C<undef> during translation.
+
+=over 4
+
+=item 1
+
+undef
+
+Converted to C<NULL>.
+
+=item 2
+
+Integer
+
+Converted to S-Lang C<Integer_Type>.
+
+=item 3
+
+Floating Point
+
+Converted to S-Lang C<Double_Type>.
+
+=item 4
+
+C<Math::Complex>
+
+Converted to S-Lang C<Complex_Type>.
+
+=item 5
+
+String
+
+Converted to S-Lang C<String_Type>.
+
+=item 6
+
+Inline::SLang::datatype
+
+Will be converted to S-Lang C<DataType_Type>.
+
+=item 7
+
+Array Reference
+
+*** NOT SUPPORTED ***
+
+I am leaning towards returning an array of type
+C<Any_Type>, since there's no guarantee that the perl
+array will be of one type, or form a regular nD array.
+
+=item 8
+
+Hash Reference
+
+*** NOT SUPPORTED ***
+
+This should be converted to a S-Lang C<Assoc_Type> object.
+
+=item 9
+
+all others
+
+*** NOT SUPPORTED ***
+
+=back
+
+=head2 Supported S-Lang Data Types
+
+The following S-Lang types may be returned from a S-Lang function to
+Perl. Unrecognized types currently cause the code to die.
+
+=over 4
+
+=item 1
+
+NULL
+
+Converted to a perl undef.
+
+=item 2
+
+[Char|UChar|Short|UShort|Int|UInt|Long|ULong]_Type
+
+Converted to a perl integer. The unsigned types are
+converted as unsigned values, whatever difference that
+makes.
+
+=item 3
+
+[Float|Double]_Type
+
+Converted to a perl floating-point number.
+
+=item 4
+
+Complex_Type
+
+Converted to a C<Math::Complex> object.
+
+=item 5
+
+String_Type
+
+Converted to a perl string.
+
+=item 6
+
+DataType_Type
+
+An object of class C<Inline::SLang::datatype> is
+returned. Unfortunately the methods of this class
+have not been worked on yet (see below).
+
+=item 7
+
+Array_Type
+
+Converted to a perl array reference. Currently
+only 1 and 2 dimensional arrays of numeric (including
+complex numbers) and strings are handled.
+
+=item 8
+
+Assoc_Type
+
+*** Partially supported ***
+
+A reference to a hash array is returned. However, this
+only works if the values stored in the array are of
+a type which we can convert into a 1D array. So,
+'variable a = Assoc_Type [Int_Type];' will be converted,
+but 'variable b = Assoc_Type [];' will not, since we
+do not currently support C<Any_Type> objects.
+
+=item 9
+
+all others
+
+*** NOT SUPPORTED ***
+
+=back
+
+=head1 DATATYPE CLASSES
+
+=head2 Complex numbers
+
+Complex numbers are represented as C<Complex_Type> in 
+S-Lang and as a
+L<Math::Complex|Math::Complex> object in Perl.
+
+=head2 Datatypes
+
+S-Lang C<Datatype_Type> values are represented using
+C<Inline::SLang::datatype> objects.
+
+Currently there are only two methods and the API could
+change based on use/feed-back:
+
+=over 4
+
+=item *
+
+Inline::SLang::datatype->new()
+
+Given a string containing the name of the datatype (eg
+"UChar_Type"), the constructor
+
+=item *
+
+stringify()
+
+Converts the object into a string. In practice you would
+not call this method directly since you can just
+include the variable into a string:
+
+  my $type = Inline::SLang::datatype->new("Any_Type");
+  print("And the type is $type\n");
+
+=back
+
+=head1 SEE ALSO
+
+L<Inline::SLang>, L<Math::Complex>
+
+=head1 AUTHOR
+
+Doug Burke <djburke@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2003, Doug Burke.
+
+All Rights Reserved. This module is free software. It may be used,
+redistributed and/or modified under the same terms as Perl itself.
+
+See http://www.perl.com/perl/misc/Artistic.html.
+
+
+

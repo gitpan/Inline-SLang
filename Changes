@@ -1,0 +1,41 @@
+# Revision history for Inline::SLang
+
+--
+version: 0.03
+date:    Tue Jan 28 12:01:49 EST 2003
+changes:
+ - Initial CPAN release (for feedback/comments as still pre-alpha)
+ - S-Lang's associative arrays are supported (in so far as there is
+   1D array support for the data type of the stored data)
+ - S-Lang's Complex_Type is stored as a Math::Complex object in Perl
+   and can convert between the two languages (scalars only)
+ - S-Lang's Datatype_Type is represented as an Inline::SLang::datatype
+   object (scalars only).
+ - 1/2D array support (S-Lang to Perl) no longer lumps together similar
+   datatypes (eg char, short, int, long) into the code (should we just
+   typecast them to long in S-Lang scope instead?)
+ - Complex types are supported in 1 & 2D arrays
+ - documentation split: data type information is now in a separate pod,
+   Inline::SLang::Types.
+ - 'perl Makefile.PL' now supports the --gdb(=string) flag (--help for 
+   help)
+   Initial support for both static and dynamically-loaded forms of the 
+   S-Lang library.
+   Added Test::More as a requirement.
+
+--
+version: 0.02
+date:    Sun Jan 19 10:56:10 EST 2003
+changes:
+ - now correctly accesses elements from String_Type (thanks to John Davis)
+ - started support for > 1D arrays (S-Lang to Perl only)
+ - added some necessary files for a perl module
+
+--
+version: 0.01
+date:    Thu Jan 16 23:59:59 EST 2003
+changes:
+ - initial version
+ - the fact it works is thanks to Neil Watkiss' Ruby & Python Inline modules
+
+--
