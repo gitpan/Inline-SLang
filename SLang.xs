@@ -90,36 +90,53 @@
  \
       default: \
         /* shouldn't happen with perl <= 5.8.0 */ \
-        croak( "Internal error: GIMME_V is a value I don't understand\n" ); \
+        croak( "Internal error: GIMME_V is set to a value I don't understand\n" ); \
  \
     } /* switch(GIMME_V) */
 
 static char *_slang_version = SLANG_VERSION_STRING; /* do we really need this ? */
 
 /*
- * Initialize the S-Lang interpreter with all the intrinsic functions
- * - should we just exit on failure or do something a bit cleaner?
+ * Error handler: we call croak on the supplied string
+ * after clearing the S-Lang error and restarting the
+ * interpreter
+ *
+ * This means that SLang_load_string() will no longer return
+ * a -1 on error: we'll get the croak called instead.
+ *
+ * Perhaps we should just append the error message onto $@
+ * instead?
+ *
+ * - I'm not sure if we need to do something like
+ *      errsv = get_sv("@", TRUE);
+ *      sv_setsv(errsv, exception_object);
+ *      croak(Nullch);
  */
-void do_slinit() {
-
-  Printf( ( "In do_slinit()\n" ) );
-
-  /* want to allow dynamic linking, hence _init_import() is required */
-  if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) )
-    exit (EXIT_FAILURE);
-
-  Printf( ( "  - initialized S-Lang and intrinsic functions\n" ) );
-
-} /* do_slinit() */
+void _sl_error_handler( char *emsg ) {
+  SLang_restart (1);
+  SLang_Error = 0;
+  /*
+   * add a trailing '\n' to stop line number being included in 
+   * $@ since the location isn't much use to people
+   */
+  croak( "%s\n", emsg );
+}
 
 MODULE = Inline::SLang	PACKAGE = Inline::SLang
 
 # At boot time:
 # - initialise the S-Lang interpreter
+# - set up the S-Lang error handler
 #
 
 BOOT:
-  do_slinit();
+  Printf( ( "In Perl's BOOT section\n" ) );
+  /* want to allow dynamic linking, hence _init_import() is required */
+  if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) )
+    croak("Internal error: unable to initialize the S-Lang library\n");
+  /* set up error hook */
+  SLang_Error_Hook = _sl_error_handler;
+  Printf( ( "  - initialized S-Lang and intrinsic functions\n" ) );
 
 PROTOTYPES: DISABLE
 
@@ -184,17 +201,98 @@ _sl_defined_types( )
     /* return the associative array reference */
     PUSHs( newRV_inc( (SV *) hashref) );
 
+#
+# returns a flag to say whether the input value is
+# the name of a DataType_Type and the name of it [after converting
+# synonyms]. See the DataType_Type object code in SLang.pm
+#
+void
+_sl_isa_datatype( inname )
+    char *inname
+  PREINIT:
+    char *outname;
+    char *slbuffer;
+    size_t blen;
+    int flag;
+
+  PPCODE:
+    blen = 34+2*strlen(inname);
+    Newz( "", slbuffer, blen, char );
+    snprintf( slbuffer, blen,
+              "string(%s);typeof(%s)==DataType_Type;", inname, inname );
+
+    Printf( ("Checking if %s is a valid DataType_Type name\n",inname) );
+    Printf( ("S-Lang buffer= [%s]\n", slbuffer) );
+
+    (void) SLang_load_string( slbuffer  );
+
+    if ( -1 == SLang_pop_integer(&flag) )
+      croak("Internal error: unable to pop an integer from the S-Lang stack" );
+    Printf( ("  flag [ie is datatype?] = [%d]\n", flag) );
+    PUSHs( sv_2mortal(newSVuv(flag)) );
+
+    if ( -1 == SLang_pop_slstring(&outname) )
+      croak("Internal error: unable to pop a string from the S-Lang stack" );
+    Printf( ("  and 'base' type name = [%s]\n", outname) );
+    PUSHs( sv_2mortal(newSVpv(outname,0)) );
+
+    /* don't forget to free up memory */
+    SLang_free_slstring(outname);
+    Safefree(slbuffer);
+
+# try and guess the datatype of a Perl variable to try and get
+# around Perl's permiscuous datatypes
+#
+# -- test for - in order
+#       float
+#       integer
+#       string
+#     or object
+#       Math::Compex
+#       s/thing derived from Inline::SLang::_Type
+#     or currently die
+#
+# see also util.c/pl2sl()
+#
+
+void
+_guess_sltype( item )
+    SV * item
+  PREINIT:
+    SV * out;
+  PPCODE:
+    /* don't call return here since can;t be bothered to read about it */
+    if ( !SvOK(item) )      { out = newSVpv( "Null_Type", 0 ); }
+    else if ( SvIOK(item) ) { out = newSVpv( "Integer_Type", 0 ); }
+    else if ( SvNOK(item) ) { out = newSVpv( "Double_Type", 0 ); }
+    else if ( SvPOK(item) ) { out = newSVpv( "String_Type", 0 ); }
+    else if ( sv_isobject(item) ) {
+      if ( sv_derived_from( item, "Math::Complex" ) ) {
+        out = newSVpv( "Complex_Type", 0 );
+      } else if ( sv_derived_from( item, "Inline::SLang::_Type" ) ) {
+	SV *type;
+	/* prob leaks mem here */
+	fixme( "memleak?" );
+	CALL_METHOD_SCALAR_SV( item, "typeof", , type );
+        CALL_METHOD_SCALAR_SV( type, "stringify", , out );
+	SvREFCNT_dec( type );
+      } else {
+      croak( "Internal error: unable to understand Perl object" );
+      }
+    } else {
+      croak( "Internal error: unable to understand Perl datatype" );
+    }
+    PUSHs( sv_2mortal( out ) );
+
 # NOTE:
 #  the perl routine sl_eval, which calls this, ensures that the
 #  string ends in a ';'. you can call this routine directly for a minor
 #  speed increase and avoid the check
 #
-# Shouldn't we just call S-Lang's eval using the perl wrapper
-# code ?
-#
-# Perhaps we should install an error handler to catch S-Lang errors
-# during SLang_load_string(). Perhaps to return the message in $@ ??
-#
+# Since we installed an error handler that calls Perl's croak on
+# an error, rather than printing the messages to STDERR,
+# SLang_load_string() no longer returns on error
+# 
 
 void
 _sl_eval( str )
@@ -208,14 +306,13 @@ _sl_eval( str )
     Printf( ("----------------------------------------------------------------------\n") );
     Printf( ("sl_eval: code: %s\n", str ) );
     Printf( ("----------------------------------------------------------------------\n") );
-    if ( -1 == SLang_load_string(str) ) {
-        /* do we really want to restart the S-Lang interpreter? */
-        SLang_restart (1);
-        SLang_Error = 0;
-	/* if the user wants exception handling wrap sl_eval in an eval */
-	croak( "ERROR: sl_eval failed to parse input" );
-	// XSRETURN_EMPTY;
-    }
+
+    /*
+     * since we have installed an error handler which croak's, 
+     * we do not need to check the return value of this function
+     */
+    (void) SLang_load_string(str);
+
     /* stick any return values on the stack */
     CONVERT_SLANG2PERL_STACK
 
@@ -254,7 +351,11 @@ sl_call_function( qualname, ... )
     }
     SLang_end_arg_list ();
 
-    /* perhaps should use SLexecute_function() instead */
+    /*
+     * perhaps should use SLexecute_function() instead
+     * - also, not clear if need to check for the return value given
+     *   the error handler
+     */
     if ( -1 == SLang_execute_function( qualname ) ) {
       croak( "Error: unable to execute S-lang function '%s'\n", qualname );
       XSRETURN_EMPTY;

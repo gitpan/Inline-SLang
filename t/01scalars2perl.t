@@ -100,7 +100,7 @@ is( $ret1, 2, 'scalar string [stack only]' );
 print Dumper($ret[0]), "\n";
 
 is ( $#ret, 5, "num of datatypes is 6" );
-isa_ok( $ret[0], "Inline::SLang::DataType_Type" );
+isa_ok( $ret[0], "DataType_Type" );
 is ( join( " ", map { "$_"; } @ret ),
   	"UChar_Type Short_Type Float_Type String_Type DataType_Type Null_Type",
 	'DataType values are converted correctly' );

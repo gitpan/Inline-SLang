@@ -69,7 +69,7 @@ my %_hacked = ( "normal" => -23.2, "static" => 4, "private" => undef );
 foreach my $linkage ( qw( normal static private ) ) {
   $ret1 = retref($linkage);
   isa_ok( $ret1, "Inline::SLang::_Type" );
-  isa_ok( $ret1, "Inline::SLang::Ref_Type" );
+  isa_ok( $ret1, "Ref_Type" );
   is( unref($ret1), "a $linkage string", "  can deref $linkage linkage" );
   hackref($linkage);
   is( unref($ret1), $_hacked{$linkage}, "  and can change" );
@@ -81,7 +81,7 @@ $ret1 = undef;
 print "Stack test: ret1=[$ret1] ret2=[$ret2] ret3=[$ret3]\n";
 ok( $ret1 == 12 && $ret3 eq "foo bar",
   "Ref_Type handling okay with the stack" );
-isa_ok( $ret2, "Inline::SLang::Ref_Type" );
+isa_ok( $ret2, "Ref_Type" );
 is( unref($ret2), $_hacked{"normal"}, "  de-reffed correctly" );
 
 # anytype tests
@@ -89,7 +89,7 @@ is( unref($ret2), $_hacked{"normal"}, "  de-reffed correctly" );
 foreach my $i ( 0, 1, 2 ) {
   $ret1 = getanytype5($i);
   isa_ok( $ret1, "Inline::SLang::_Type" );
-  isa_ok( $ret1, "Inline::SLang::Any_Type" );
+  isa_ok( $ret1, "Any_Type" );
   is( "$ret1", "Any_Type", "  Any_Type stringifies correctly" );
   is( $ret1->is_struct_type, 0, "  and isn't a structure" );
 }
@@ -137,12 +137,14 @@ define retref(id) {
   { case "normal":  return &_a_normal_string; }
   { case "static":  return &_a_static_string; }
   { case "private": return &_a_private_string; }
+  { verror("Test error: retref sent '%s'\n", id ); }
 }
 define hackref(id) {
   switch (id)
   { case "normal":  _a_normal_string = -23.2; }
   { case "static":  _a_static_string = 4; }
   { case "private": _a_private_string = NULL; }
+  { verror("Test error: hackref sent '%s'\n", id ); }
 }
 define unref(x) { return @x; }
 

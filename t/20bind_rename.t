@@ -40,11 +40,12 @@ SKIP: {
   like( $@, qr/^Undefined subroutine &main::fn_in_global called at /,
 	"Can not call fn_in_global() as fn_in_global()" );
 
-  my $struct = Inline::SLang::Struct_Type->new( "aa", "bb" );
-  $struct->set_field( "aa" => 23, "bb" => "a string" );
+  my $struct = Struct_Type->new( ["aa", "bb"] );
+  $$struct{aa} = 23;
+  $$struct{bb} = "a string";
 
   # check we can use the S-Lang intrinsic functions
-  ok( eq_array( foo::get_struct_field_names($struct,), ["aa","bb"] ),
+  ok( eq_array( foo::get_struct_field_names($struct), ["aa","bb"] ),
       "Can call get_struct_field_names() as foo::get_struct_field_names()" );
 
   is( foo::gsf($struct,"aa"), 23,

@@ -26,6 +26,8 @@
 void pl2sl( SV *item );
 SV * sl2pl( void );
 
+char *_get_object_type( SV *item );
+
 /* macro definitions intended for util.h only but placed here for convenience */
 
 /*
@@ -37,6 +39,12 @@ SV * sl2pl( void );
  *
  * extra_par_code is a set of XPUSHs(...) statements used to push
  * method parameters onto the stack. If there are none then use ""
+ *
+ * Note:
+ *   these routines assume that the return value - if there is
+ *   one - are going to be placed onto the Perl stack, hence they
+ *   explicitly increase the reference count of the returned variable.
+ *   This may turn out to be silly.
  *
  *   CALL_METHOD_VOID( SV *obj, char *method, extra_par_code )
  *     calls the method on the given object which is expected
@@ -276,6 +284,17 @@ SV * sl2pl( void );
       Printf( ("  stack contains: unsigned ctype = %i\n", ival ) ); \
       return newSVuv(ival); \
     }
+
+/* 
+ * need to pop item off S-Lang's internal stack and push
+ * it onto S-Lang's main stack (or I've confused myself)
+ */
+#define SL_PUSH_ELEM1_ONTO_STACK(nelem) \
+  (void) SLang_load_string( \
+    "$2=struct {value};set_struct_field($2,\"value\",$1);__push_args($2);" \
+  ); \
+  _clean_slang_vars(nelem);
+
 
 #endif /* SL2PL_UTIL_H */
 

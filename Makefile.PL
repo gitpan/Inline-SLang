@@ -9,28 +9,25 @@
 # to point out it's S-Lang and not 'slang'.
 #
 
-use strict;
-
-print "\nWARNING: this is pre-alpha code. Absolutely no guaranties about" .
-    " anything!\n\n";
-
 eval { require 5.6.0 } or die <<EOD;
 ############
 ###
 ### The Inline::SLang module requires version v5.6.0 or later of perl
 ### Please upgrade your Perl before installing this module.
 ###
-### (note that currently this requirement is just to save myself some
-###  work and could probably be relaxed, although once PDL support
-###  is included it will be a necessary requirement)
-###
 ############
 EOD
+
+# just in case...
+print "\nPlease note - this is an alpha release.\n\n";
+
+use strict;
 
 use Data::Dumper;
 use Config;
 use ExtUtils::MakeMaker;
 use Getopt::Long;
+use IO::File;
 
 ## User options
 
@@ -49,6 +46,7 @@ my $slanginc = "";
 #
 my @guess_path = qw( /usr /usr/local );
 
+# provide support for CIAO 3.0 users
 if ( defined $ENV{"ASCDS_INSTALL"} ) {
 
     # the location of the S-Lang library/include files has changed
@@ -58,29 +56,15 @@ if ( defined $ENV{"ASCDS_INSTALL"} ) {
     die "Error: unable to read $ENV{ASCDS_INSTALL}/VERSION\n"
       if $#words == -1;
 
-    if ( $words[1] eq "2.2.1" or $words[1] eq "2.3" ) {
-	# note: only available if the OTS package was installed
-	my $path = $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.4";
-	if ( -d $path ) {
-	    unshift @guess_path, $path;
-	    print "Found CIAO $words[1] installation with OTS.\n\n";
-	}
-    } else {
-	# assume v >= 3.0 (and that the location hasn't changed from 3.0)
-##	unshift @guess_path, $ENV{"ASCDS_INSTALL"};
-##	unshift @guess_path, $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.5"; # ugh - missing slang.h in include/
-	unshift @guess_path, $ENV{"ASCDS_INSTALL"} . "/ots/slang"; # ugh - missing slang.h in include/
-	print "Found CIAO $words[1] installation.\n\n";
+    # if v 2.X then we don't add it to the directory list
+    if ( $words[1] !~ /^2\./ ) {
 
-## hack
-#	$slanglib = $ENV{"ASCDS_INSTALL"} . "/lib";
-#	$slanginc = $ENV{"ASCDS_INSTALL"} . "/ots/slang.v1.4.5/include";
+      # assume v >= 3.0 (and that the location hasn't changed from 3.0)
+      unshift @guess_path, $ENV{"ASCDS_INSTALL"} . "/ots/slang"; # ugh - missing slang.h in include/
+      print "Found CIAO $words[1] installation.\n\n";
+
     }
 } # if: defined $ASCDS_INSTALL
-
-#### TEST
-#$slangdir = "/home/burke/local/";
-#$debug = 1;
 
 ## Check the user-supplied options
 
@@ -108,8 +92,7 @@ my $libname_dyn  = "lib/libslang$ext_dyn";
 my $incname      = "include/slang.h";
 
 # try looking through a set of directories
-# - note we include $ASCDS_INSTALL if it's defined
-#   and we're assuming a UNIX filesystem
+# - note we're assuming a UNIX filesystem
 #
 if ( $slangdir ) {
     # not absolutely necessary, but simplifies the logic a bit
@@ -160,6 +143,28 @@ die "Error: unable to find slang.h in the include directory ($slanginc)\n"
 die "Error: unable to find libslang[$ext_dyn|$ext_stat] in the library directory ($slanglib)\n"
     unless -e "$slanglib/libslang$ext_dyn" || -e "$slanglib/libslang$ext_stat";
 
+# now check for version in slang.h
+#
+# could also check for things like max num of array dims
+# and whether support for floating-point numbers
+#
+# an alternative is to use a configure-style approach and compile
+# a small C program...
+#
+my $fh = IO::File->new( "< ${slanginc}/slang.h" )
+  or die "Error: unable to read from ${slanginc}/slang.h\n";
+while ( <$fh> ) {
+  chomp;
+  s/^\s+//g;
+  next unless /^#define\s+SLANG_VERSION\s/;
+  my ( $dummy, $name, $version, @rest ) = split;
+  die "Error: S-Lang version ($version) must be >= 10407 for Inline::SLang\n"
+    unless $version >= 10407;
+  print "Compiling against S-Lang version $version\n";
+  last;
+}
+$fh->close;
+
 my $incpath = "-I$slanginc";
 my $libpath = "-L$slanglib -lslang";
 
@@ -182,7 +187,7 @@ WriteMakefile(
                             # not really needed but am too lazy to code around
 			    'Test::More' => 0,
 			    'Inline' => 0.42,
-			   }, # e.g., Module::Name => 1.1
+			   },
     realclean		=> { FILES => '_Inline' },
     ABSTRACT_FROM       => 'SLang.pod',
     AUTHOR              => 'Doug Burke <djburke@cpan.org>',
@@ -216,6 +221,8 @@ $paths
               screen output)
 
 END
-# ' stupid vim
+
     exit 0;
 }
+
+# end of Makefile.PL

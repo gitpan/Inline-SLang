@@ -1,6 +1,75 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.10
+date:    Sat May  3 19:39:00 EDT 2003
+changes:
+
+Since there have been a number of significant changes over 0.06 the 
+version number has been pushed to 0.10.
+
+ - Support for S-Lang libraries earlier than 1.4.7 has been discontinued.
+
+ - Perl class names have been changed from Inline::SLang::XXX to
+   XXX. This reduces the amount of typing, but it doesn't fit in
+   with standard Perl module/namespace policy. There's also the (rare?)
+   possibility that a data type name will clash with an extant
+   Perl module. A compromise would be to use SLang::XXX?
+
+ - S-Lang structs (both Struct_Type and named structs) are now handled
+   using a tied hash. What this means is that you get back a hash
+   reference and so can use it as any other hash (e.g. $$foo{x}) with
+   the caveat that you can not create new keys and the iteration order
+   - eg the value from keys(%$foo) and each(%$foo) - is fixed to match
+   that of the struct's fields. The returned value is still a member
+   of the Struct_Type class (or derived from it if it's a named struct).
+
+ - S-Lang Assoc_Type arrays are now converted to the Perl Assoc_Type
+   class (and vice-versa). This is a reference to a hash array (as with
+   Struct_Type) but you can add and delete keys. Note that when iterating
+   through the key names of the array [eg via Perl's keys/values/each or
+   the get_keys/values method calls] you are NOT guaranteed to get
+   the same order as S-Lang's assoc_get_keys/values/foreach construct.
+   If a user supplies a hash reference (ie not an Assoc_Type object)
+   then this gets converted to an 'Assoc_Type [Any_Type]' array.
+
+ - Have created a Perl Array_Type class to handle S-Lang arrays. This
+   will not use a tied interface, instead using methods as mutators.
+   It is expected that piddles will be used for numeric arrays - at least
+   once the PDL support is added! - and so this will only really be
+   used for arrays of non-numeric data types (and even then you will
+   probably want to use a normal Perl array reference as discussed below).
+
+ - Perl array references are converted to S-Lang arrays with the
+   type and dimensionality guessed at based on the first element in the
+   array. Note that it's not too hard to confuse the poor computer; for
+   such cases you can use the Inline::SLang::sl_array() function to 
+   specify the data type and/or dimensionality.
+
+ - Conversion of S-Lang arrays to Perl now accomdates all dimensions
+   (previously only 1 and 2D) and all variable types (previously only
+   numeric, string, and a couple of other ones such as DataType_Type).
+   Still use Perl array references to represent this data (and not
+   Array_Type objects). This will be configurable.
+
+ - Several Inline::SLang::XXX routines can now be exported to Perl's
+   main package by use of the EXPORT configuration option (rather than
+   the standard Perl way of using 'use foo qw( ... );'. This can be
+   looked at as something of a hack.
+ - Handling of S-Lang errors has been improved: they are now caught
+   and then converted into Perl errors. So, calls to sl_eval() can
+   now be wrapped in an eval block and the S-Lang error message will
+   appear in $@. Needs more testing to see if this is really what is
+   wanted (I don't really grok Perl's error handling). For instance the
+   lack of line numbers can be annoying.
+   This means that calling DataType_Type->new() with an unknown type
+   name no longer results in S-Lang error messages printed to STDERR
+   (which it did in 0.06).
+ - fixed mem leak when converting structs from Perl to S-Lang. Note that
+   the code used *may* trigger a mem leak in the S-Lang library if you
+   are using a version < 1.4.9.
+
+--
 version: 0.06
 date:    Thu Apr  3 22:36:54 EST 2003
 changes:

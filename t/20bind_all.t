@@ -1,7 +1,7 @@
 #
 # test binding functions: BIND_NS => "All"
 #
-# - this requires S-Lann v1.4.7
+# - this requires S-Lang v1.4.7 or later
 #
 
 use strict;
@@ -10,8 +10,12 @@ use Test::More tests => 2;
 
 ## Tests
 
-use Inline 'SLang' => Config => BIND_NS => "All";
-use Inline 'SLang' => <<'EOS1';
+my $use_ns;
+
+BEGIN {
+  eval '
+use Inline \'SLang\' => Config => BIND_NS => "All";
+use Inline \'SLang\' => <<\'EOS1\';
 
 define fn_in_global(x) { "in global"; }
 
@@ -20,9 +24,10 @@ implements( "foo" );
 define fn_in_foo(x) { "in foo"; }
 
 EOS1
+';
+  $use_ns = $@ eq "";
 
-# can we test out namespaces?
-my $use_ns = Inline::SLang::sl_eval( "_slang_version > 10406;" );
+}
 
 SKIP: {
     skip

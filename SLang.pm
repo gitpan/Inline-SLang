@@ -25,15 +25,23 @@ require Inline::denter;
 
 use vars qw(@ISA $VERSION @EXPORT_OK);
 
-$VERSION = '0.06';
+$VERSION = '0.10';
 @ISA = qw(Inline DynaLoader Exporter);
+
+# since using Inline we can't use the standard way
+# of importing symbols, so we add an EXPORT config option
+# which we use to mimic the Exporter interface (well,
+# we actually get Exporter to do the work so mimic isn't
+# really the correct word...)
+#
 @EXPORT_OK =
     qw(
-       sl_eval
+       sl_eval sl_typeof sl_array
        );
 
-# should read ExtUtils::MakeMaker to find out about these
-#sub import { Inline::SLag->export_to_level(1,@_); }
+# do I need this [left over from code taken from Inline::Ruby/Python
+# modules but not sure what it's really for and too lazy to read
+# about Exporter...]
 #sub dl_load_flags { 0x01 }
 Inline::SLang->bootstrap($VERSION);
 
@@ -65,6 +73,10 @@ sub usage_config_bind_slfuncs {
   "The Inline::SLang option 'BIND_SLFUNCS' must be given an array reference";
 }
 
+sub usage_config_export {
+  "The Inline::SLang option 'EXPORT' must be sent an array reference";
+}
+
 sub validate {
   my $o = shift;
     
@@ -72,6 +84,7 @@ sub validate {
   $o->{ILSM} ||= {};
   # do I need to add support for the FILTERS key in the loop below?
   $o->{ILSM}{FILTERS} ||= [];
+  $o->{ILSM}{EXPORT}  = undef;
   $o->{ILSM}{bind_ns} = [ "Global" ];
   $o->{ILSM}{bind_slfuncs} = [];
 
@@ -107,6 +120,14 @@ sub validate {
       next;
     } # BIND_SLFUNCS
 
+    if ( $key eq "EXPORT" ) {
+      my $type = ref($value);
+      croak usage_config_export()
+	unless $type eq "ARRAY";
+      $o->{ILSM}{EXPORT} = $value;
+      next;
+    } # EXPORT
+
     print usage_validate $key;
     $flag = 1;
   }
@@ -127,6 +148,9 @@ sub validate {
 # Have considered allowing a compile-time option to use a
 # byte-compiled version of the code, but decided it was too
 # much effort.
+#
+# Have a nasty little hack to allow exporting of Inline::SLang::xxx
+# functions (can't work out how to do this properly)
 #
 #==========================================================================
 sub build {
@@ -212,8 +236,9 @@ sub build {
     }
 
     # Run the code: sl_eval falls over on error
-    # we ignore any output from the eval'd code
-    sl_eval( $o->{ILSM}{code} );
+    eval { sl_eval( $o->{ILSM}{code} ); };
+    die "Error evaluating S-Lang code: message is\n\n$@\n"
+      if $@;
 
     # update the list of namespaces if BIND_NS was set to "All"
     #
@@ -280,7 +305,7 @@ sub build {
     #
     # The list below is the remaining types - ie those we plan
     # to handle separately - either by using native Perl
-    # types or hand-crafter classes
+    # types or hand-crafted classes
     # (ignoring the fact that 12/14 are both UInteger_Type)
     #
     my %ignore = map { ($_,1); }
@@ -312,40 +337,55 @@ sub build {
 
       # create the Perl class code
       if ( $$dref[1] ) {
-	# a sub-class of Inline::SLang::Struct_Type
+	# a sub-class of Struct_Type
 	$classes .= qq{
-package Inline::SLang::$dname;
+package $dname;
 no strict;
-\@ISA = ( "Inline::SLang::Struct_Type" );
+\@ISA = ( "Struct_Type" );
 use strict;
 };
 
-	# find out the field names and create the constructor
+	# find out the field names and create the 'constructor'
 	my $fields = Inline::SLang::sl_eval(
 	     "get_struct_field_names(@" . $dname . ");"
 	);
 
 	$classes .=
-'sub new {
+'
+use Carp;
+
+sub new {
   my $this  = shift;
   my $class = ref($this) || $this;
+  tie( my %self, $class );
+  bless \%self, $class;
+}
 
-  # we have no inputs, since we know what the field names are
-  my @fields = ( ' . join(', ',map { "\"$_\""; } @$fields) . ' );
-  my $self = {
-    fields => [ @fields ],
-    data   => { map { ($_,undef) } @fields },
-  };
-  bless $self, $class;
-  return $self;
+# really should use ref($this) to get class name
+# rather than hard coding it
+#
+sub _define_struct { return "\$1 = \@' . $dname . ';"; }
 
-} # new()
+sub TIEHASH { 
+  croak "Usage: tie( %hash, \'$_[0]\' )"
+    unless $#_ == 0;
+
+  my $class  = shift;
+  my @fields = qw( ' . join(" ",@$fields) . ' );
+
+  # [0] = hash reference
+  # [1] = array reference (field names)
+  # [2] = scalar: counter used when iterating through the hash
+  #
+  my $struct = { map { ($_,undef); } @fields };
+  return bless [ $struct, \@fields, 0 ], $class;
+}
 ';
 
       } else {
 	# a sub-class of Inline::SLang::_Type
 	$classes .= qq{
-package Inline::SLang::$dname;
+package $dname;
 no strict;
 \@ISA = ( "Inline::SLang::_Type" );
 use strict;
@@ -364,6 +404,26 @@ sub DESTROY {
       }
     } # while: each %$dtypes
 
+    # build the horrible exporter hack
+    #
+    # handle the EXPORT method
+    # - this is a *horrible* way to do it; don't seem to be
+    #   able to do it easily via
+    #     Inline::SLang->export_to_level( 1|2, @{ $o->{ILSM}{EXPORT} } );
+    #   so we do this hack
+    #
+    my $export = "";
+    if ( defined $o->{ILSM}{EXPORT} ) {
+      ## Inline::SLang->export_to_level( 2, @{ $o->{ILSM}{EXPORT} } );
+
+      my %href = map { ($_,1); } @EXPORT_OK;
+      foreach my $func ( @{ $o->{ILSM}{EXPORT} } ) {
+	die "Error: EXPORT option sent an unknown symbol $func\n"
+	  unless exists $href{$func};
+	$export .= "*::$func = \\&$func;\n";
+      }
+    }
+
     # Cache the results
     #
     my $odir = "$o->{API}{install_lib}/auto/$o->{API}{modpname}";
@@ -375,6 +435,7 @@ sub DESTROY {
         *pl_classes => $classes,
         *ns_map     => \%ns_map,
 	*code       => $o->{ILSM}{code},
+	*export     => $export,
     );
 
     my $odat = $o->{API}{location};
@@ -383,10 +444,14 @@ sub DESTROY {
     $fh->print( $parse_info );
     $fh->close();
 
+    # almost certainly NOT clever to change meaning of EXPORT
+    # field here (from array ref to string of perl code to evaluate)
+    #
     $o->{ILSM}{namespaces} = \%namespaces;
     $o->{ILSM}{sl_types}   = $dtypes;
     $o->{ILSM}{pl_classes} = $classes;
     $o->{ILSM}{ns_map}     = \%ns_map;
+    $o->{ILSM}{EXPORT}     = $export;
     $o->{ILSM}{built}++;
 
 } # sub: build()
@@ -410,7 +475,13 @@ sub DESTROY {
 #   ( type, key ) = _store_data( value );
 #   _remove_data( key );
 #   _store = Assoc_Type [String_Type]
-# 
+#
+# -- NOTE: we also handle the EXPORT config option here:
+#      a hack to allow exportable function names without
+#      messing up the import of fn names from S-Lang
+#    Do this AFTER binding the S-Lang functions.
+#    May change my mind on this.
+#
 #==============================================================================
 sub load {
     my $o = shift;
@@ -425,16 +496,19 @@ sub load {
 	or croak "Inline::SLang couldn't open parse information!";
       my $sldat = join '', <$fh>;
       $fh->close();
-      
+
       my %sldat = Inline::denter->new->undent($sldat);
       $o->{ILSM}{namespaces} = $sldat{namespaces};
       $o->{ILSM}{sl_types}   = $sldat{sl_types};
       $o->{ILSM}{pl_classes} = $sldat{pl_classes};
       $o->{ILSM}{ns_map}     = $sldat{ns_map};
       $o->{ILSM}{code}       = $sldat{code};
+      $o->{ILSM}{EXPORT}     = $sldat{export};
 
       # Run it
-      sl_eval( $o->{ILSM}{code} );
+      eval { sl_eval( $o->{ILSM}{code} ); };
+      die "Error evaluating S-Lang code: message is\n\n$@\n"
+	if $@;
     }
 
     # Bind the functions
@@ -491,7 +565,7 @@ static define _store_data( invar ) {
 %    exit(1);
   }
   _store[key] = invar;
-  return ( "Inline::SLang::" + string(typeof(invar)), key );
+  return ( string(typeof(invar)), key );
 } % _store_data
 
 % note: assoc_delete_key() does nothing if the key
@@ -524,19 +598,161 @@ static define _dump_data () {
 	     );
     # do I need to end with an 'implements("Global");' ??
 
+    # handle the EXPORT method
+    # - this is a *horrible* way to do it; don't seem to be
+    #   able to do it easily via
+    #     Inline::SLang->export_to_level( 1|2, @{ $o->{ILSM}{EXPORT} } );
+    #   so we do this hack
+    #
+    if ( $o->{ILSM}{EXPORT} ne "" ) {
+      ## Inline::SLang->export_to_level( 2, @{ $o->{ILSM}{EXPORT} } );
+      eval $o->{ILSM}{EXPORT};
+      croak $@ if $@;
+    }
+    
     $o->{ILSM}{loaded}++;
 
 } # sub: load()
 
 #==============================================================================
 # Evaluate a string as a piece of S-Lang code
+#
+# want to allow sl_eval( '$1=(); ...($1);', $var1, ... );
+#
 #==============================================================================
 sub sl_eval ($) {
-    my $str = shift;
-    # too lazy to do a possibly-quicker check than this regexp
-    $str .= ";" unless $str =~ /;\s*$/;
-    return _sl_eval($str);
+  my $str = shift;
+  # too lazy to do a possibly-quicker check than this regexp
+  $str .= ";" unless $str =~ /;\s*$/;
+
+  # _sl_eval() sets $@ with the S-Lang error (if there is
+  # one). To allow sl_eval() to be wrapped in an eval block
+  # (and so catch the error), we don't do any checks for
+  # errors here
+  #
+  return _sl_eval($str);
 }
+
+#==============================================================================
+# sl_typeof()
+#
+# Our version of S-Lang's typeof() command. This avoids having
+# to convert variables from Perl to S-Lang to just get the type
+# of the variable. Then again, since we delegate all the processing to
+# the typeof() method for the object class (if there is one) we're
+# not really that efficient
+#
+# If the variable is unrecognised then return undef
+# (if sent an undef then "Null_Type" is returned)
+#
+# Did have support for tied hash references but decided that the
+# user should never be using one of these directly - ie should
+# only ever see a Struct_Type/Assoc_Type object, in which case
+# we use the object typeof() method.
+#
+# Array references could be 'handled' - eg return Array_Type
+# but not implementing this at the moment [not convinced this is really
+# what we want]
+#
+#==============================================================================
+sub sl_typeof ($) {
+  my $invar = shift || return DataType_Type->new("Null_Type");
+  my $ref   = ref($invar);
+
+  # no reference, then we have to work out whether string or number
+  # - which is a pain, so let the internals do it for us
+  #   UMMMM
+  if ( $ref eq "" ) { return sl_eval("typeof($invar);"); }
+
+  # Math::Complex -> Complex_Type
+  if ( UNIVERSAL::isa( $invar, "Math::Complex" ) ) {
+    return DataType->new("Complex_Type");
+  }
+
+  # defined from the base class?
+  if ( UNIVERSAL::isa( $invar, "Inline::SLang::_Type" ) ) {
+    return $invar->typeof();
+  }
+
+  # do not know what we've been sent so
+  return undef;
+} # sl_typeof
+
+#==============================================================================
+#
+# Usage:
+#   $obj = sl_array( $aref )
+#   $obj = sl_array( $aref, $adims )  - dims of $aref
+#   $obj = sl_array( $aref, $type )   - type of $aref (string or DataType_Type)
+#   $obj = sl_array( $aref, $adims, $type )
+#
+# Aim:
+#   Convert a Perl array reference to an Array_Type object
+#
+#   This is a utility routine which is just a wrapper around
+#   Array_Type->new() - with a few little convenince functions
+#   and is intended really for use when calling S-lang funcs - ie
+#      some_sl_func( ..., sl_array([0,1,2],"Integer_Type"), ... )
+#   ie so you don't have to mess around with the Array_Type class
+#   as long as possible
+#
+#==============================================================================
+sub sl_array {
+
+  # checking of input is not bullet proof
+  #
+  my $usage = <<'EOD';
+Usage:
+  my $obj = sl_array( $aref );
+  my $obj = sl_array( $aref, $adims );
+  my $obj = sl_array( $aref, $atype );
+  my $obj = sl_array( $aref, $adims, $atype );
+EOD
+
+  my $narg = 1 + $#_;
+  die $usage unless $narg > 0 and $narg < 4 and
+    ref($_[0]) eq "ARRAY";
+  my $aref = shift;
+
+  # do we need to calculate the dims and/or type?
+  #
+  my $adims;
+  my $atype;
+  if ( $narg == 3 ) {
+    $adims = shift;
+    $atype = shift;
+  } else {
+    my $val;
+    if ( $narg == 2 ) {
+      $val = shift;
+      if ( ref($val) eq "ARRAY" ) { $adims = $val; }
+      else                        { $atype = $val; }
+    }
+
+    if ( defined( $adims ) ) {
+      # get the first item: only need to loop through the
+      # number of dims; the actual size of each axis is irrelevant here
+      $val = $aref;
+      foreach ( 0 .. $#$adims ) { $val = $$val[0]; }
+    } else {
+      $adims = [];
+      $val = $aref;
+      while ( ref($val) eq "ARRAY" ) {
+	push @{$adims}, 1+$#$val;
+	$val = $$val[0];
+      }
+    }
+
+    $atype = _guess_sltype( $val ) unless defined $atype;
+
+    # note: not a necessary check for a string
+    die "Error: array type must either be a string or DataType_Type object\n"
+      unless ref($atype) eq "" or UNIVERSAL::isa($atype,"DataType_Type");
+    
+  }
+
+  return Array_Type->new( $atype, $adims, $aref );
+} # sl_array
 
 #==============================================================================
 # Wrap a S-Lang function with a Perl sub which calls it.
@@ -552,7 +768,7 @@ sub sl_bind_function {
     } else {
       $qualname = "${slangns}->${slangfn}";
     }
-    
+
     my $bind = <<END;
 sub $perlfunc {
     unshift \@_, "$qualname";
@@ -579,23 +795,28 @@ sub info {
     # we won't need to do this
     #
     my $ver = sl_eval("_slang_version_string");
-    $info .= "Version of S-Lang:\n";
-    $info .= "\tcompiled against " . _sl_version() . "\n";
-    $info .= "\tusing            $ver\n";
-    $info .= "\tand Perl module  $VERSION\n\n";
+    $info .= "Version of S-Lang:";
+    if ( _sl_version() eq $ver ) {
+      $info .= " $ver\n";
+    } else {
+      $info .= " compiled with " . _sl_version();
+      $info .= " but using $ver\n";
+    }
+    $info .= "Perl module version is $VERSION\n\n";
 
     $info .= "The following S-Lang types are recognised:\n";
     my $str = "";
     while ( my ( $dname, $dref ) = each %{ $o->{ILSM}{sl_types} } ) {
-      $str .= " $dname";
-      $str .= " [Struct_Type]" if $$dref[1];
-      if ( length($str) > 70 ) {
+      my $curr = " $dname";
+      $curr .= " [Struct_Type]" if $$dref[1];
+      if ( length($str) + length($curr) > 70 ) {
 	$info .= "$str\n";
-	$str = "";
+	$str = $curr;
+      } else {
+	$str .= $curr;
       }
     }
-    $info .= "$str\n" unless $str eq "";
-    $info .= "\n";
+    $info .= "$str\n\n";
 
     $info .= "The following S-Lang namespaces have been bound to Perl:\n\n";
     while ( my ( $slns, $plns ) = each %{ $o->{ILSM}{ns_map} } ) {
@@ -625,22 +846,23 @@ sub info {
 
 #==============================================================================
 # S-Lang datatypes as perl objects, all based on the Inline::SLang::_Type 
-# class.
+# class. Note that all other classes are just called <SLang type name>
+# rather than Inline::SLang::<SLang Type Name>, as of v0.07.
+# This may turn out to be a bad idea, since we don't check for name
+# clashes. We could use SLang::<Slang Type name> as a compromise?
 #
 # Inline::SLang::_Type
 #
 # - base class of all the S-Lang types that aren't convertable to a 
 #   common Perl type/object
 # - essentially all this does (at the moment) is ensure that every class 
-#   has 3 methods:
+#   has 4 methods:
 #     an overloaded "print/stringify" function
-#     typeof()
+#     typeof() - returns a DataType_Type object
+#     _typeof() - returns a DataType_Type object
 #     is_struct_type() [only useful when we support type-deffed structs]
 #
 #   Might want to add new() to this list (and have it croak)?
-#
-# To Do:
-#    remove Inline::SLang:: from the class names
 #
 #==============================================================================
 
@@ -649,53 +871,212 @@ package Inline::SLang::_Type;
 use strict;
 use Carp;
 
-# returns the name of the object w/out the leading 'Inline::SLang' text
+# returns the name of the object (which we take to be the last part of the
+# object name with '::' as the separator)
+# 
 sub typeof {
   my $self  = shift;
   my $class = ref($self) || $self;
-  return substr($class,15);
+  return DataType_Type->new( ((split("::",$class))[-1]) );
 }
+
+# _typeof is only really relevant for array types where it is over-ridden
+# so we ignore efficiency for ease of coding
+# 
+sub _typeof { return $_[0]->typeof; }
 
 # pretty printer, which just calls typeof
 # [would be quicker to include the typeof code directly]
 #
 use overload ( "\"\"" => \&Inline::SLang::_Type::stringify );
-sub stringify { return $_[0]->typeof(); }
+sub stringify { return $_[0]->typeof()->stringify; }
 
 sub is_struct_type { 0; }
 
 #==============================================================================
-# Inline::SLang::Struct_Type
+# Assoc_Type
+#
+#  Handle Assoc_Type arrays.
+#
+#  We use a tied hash to allow users to use a hash syntax for
+#  read/write of the fields (so we don't have to 'invent' our
+#  own API), whilst using tied routines. The reason for needing
+#  a tied hash, rather than use a hash outright - is so that we
+#  can store the 'type' of the Assoc_Type array, ie whether it
+#  was created as
+#    Assoc_Type [String_Type]
+#  or
+#    Assoc_Type [Any_Type]
+#
+#  See also Struct_Type
+#
+#  Usage:
+#    S-Lang: foo = Assoc_Type [String_Type];
+#    Perl:   $o1 = Assoc_Type->new( "String_Type" );
+#            $o1 = Assoc_Type->new( DataType_Type->new("String_Type") );
+#            $o2 = tie %foo, Assoc_Type, "String_Type";
+#            $o2 = tie %foo, Assoc_Type, DataType_Type->new("String_Type");
+#            ['$o2 =' is optional]
+#
+#    The use of tie is - currently - frowned upon. Let's see how the
+#    whole experiment pans out before making any stronger statements
+#
+#  Note that Assoc_Type is a subclass of Inline::SLang::_Type, so
+#  $o1 [1st Perl example] and $o2 [3rd example] have a number of
+#  methods (typeof, is_struct_type [returns 0], and an over-loaded stringify)
+#
+# Although we do provide the S-Lang struct mutators as object methods
+# I strongly suggest using the native hash interface instead since this
+# is Perl *AND* I do not guarantee these methods will reminan [they
+# only exist since they are useful internally when converting Perl -> S-Lang]
+#
+# S-Lang             Perl
+#  get_keys()          keys %$o1   *** but NOT 'keys %$o2' I think ***
+#                      keys %foo       ^^^ this could have been due to a bug?
+#    NOTE: do not guarantee the same order as S-Lang; in fact almost guarantee they'll be different
+#
+#  get_values()        values %$o1
+#
+#  key_exists()        exists $$o1{baz}
+#
+#  delete_key()        delete $$o1{baz}
+#
+#  length()            ??
+#
+# Also going to add get/set_value() which aren't in S-Lang but are useful internally
+#
+# To do:
+#   either copy() or dup()
+#
+# Over-ride Inline::SLang::_Type's _typeof method to return the type of 
+# the values stored in the array
+# [unlike S-Lang's _typeof which returns Assoc_Type]
+#
+#==============================================================================
+
+package Assoc_Type;
+
+require Tie::Hash;
+
+no strict; # stupid way to get package-scoped global
+@ISA = qw( Tie::ExtraHash Inline::SLang::_Type );
+use strict;
+
+use Carp;
+
+sub new {
+  my $this  = shift;
+  my $class = ref($this) || $this;
+  tie( my %self, $class, shift );
+  bless \%self, $class;
+}
+
+sub _typeof {
+  my $self = shift;
+  my $aref = tied(%$self);
+  return $$aref[1];
+}
+
+# these are private methods: user code should *NOT* use this, or even
+# assume it's going to exist in future versions of the module
+# note: we return the hash reference stored within the array
+# reference and NOT the array reference itself
+#
+# for speed we de-reference the DataType_Type object directly in
+# _private_get_typeof rather than call stringify on it
+sub _private_get_hashref { return ${ tied( %{$_[0]} ) }[0]; }
+sub _private_get_typeof  { return ${ ${ tied( %{$_[0]} ) }[1] }; }
+
+# and now methods that match S-Lang function names
+# I don't particularly want them (there are more Perl like
+# ways to perform these functions), but they are currently
+# used by the Perl -> S-Lang code [see util.c]
+#
+# note: got get_keys/values order is NOT guaranteed to match that of S-Lang
+#
+sub get_keys   { return [ keys %{$_[0]} ]; }
+sub get_values { return [ values %{$_[0]} ]; }
+sub get_value  { return $_[0]->{$_[1]}; }
+sub set_value  { return $_[0]->{$_[1]} = $_[2]; }
+sub key_exists { return exists $_[0]->{$_[1]}; }
+sub delete_key { return delete $_[0]->{$_[1]}; }
+
+# a general array function
+sub length     { return scalar( keys %{$_[0]} ); } # not very efficient
+
+# now the tied methods
+#
+# We only bother with TIEHASH since everything else is inherited from Tie::ExtraHash
+#
+sub TIEHASH {
+  croak "Usage: tie %hash, '$_[0]', type (either a string or DataType_Type object)"
+    unless $#_ == 1 and ( ref($_[1]) eq "" or UNIVERSAL::isa($_[1],"DataType_Type") );
+
+  my $class  = shift;
+  my $intype = shift;
+  my $type;
+  if ( UNIVERSAL::isa($intype,"DataType_Type") ) {
+    $type = $intype;
+  } else {
+    $type = DataType_Type->new($intype) ||
+      die "Error: unrecognised type $intype when creating $class object";
+  }
+
+  # [0] = hash reference
+  # [1] = DataType_Type object representing the type of the assoc array
+  #
+  return bless [ {}, $type ], $class;
+}
+
+#==============================================================================
+# Struct_Type
 #
 #  Handle structs.
 #  type-deffed structs - e.g. 'typedef { foo, bar } Baz_Type;' -
 #  are handled by sub-classing this type
 #
-# Methods - based on those provided by S-Lang for structures:
-#   new()
-#   is_struct_type() - actually redefines the base class method
-#   get_field_names()
-#   get_field() - extended to allow multiple fields
-#   set_field() - extended to allow multiple fields
+#  We use a tied hash to allow users to use a hash syntax for
+#  read/write of the fields (so we don't have to 'invent' our
+#  own API), whilst using tied routines to over-ride some of the
+#  default behaviour of the hash, namely:
+#    adding new fields
+#    providing a 'random' access to the fields via each/next
+#    [the order is equal to that of the order of the fields in the struct]
 #
-# Note:
-#   to avoid having to add the same functions into the sub-classes
-#   of Inline::SLang::Struct_Type, we make all the functions
-#   aware of whether they are being run in the "base" [ie this] class
-#   or a derived class (the use of base is incorrect since _Type is
-#   really the base class ;)
-#   - which probably isn't a clever thing to do
+#  Similar to handling Assoc_Type arrays
+#
+#  Usage:
+#    S-Lang: foo = struct { bob, foo, bar };
+#    Perl:   $o1 = Struct_Type->new( ["bob","foo","bar"] );
+#            $o2 = tie %foo, Struct_Type, [ "bob", "foo", "bar" ];
+#            ['$o2 =' is optional]
+#
+#    The use of tie should NOT BE USED: use Struct_Type->new() instead.
+#
+#  Note that Struct_Type is a subclass of Inline::SLang::_Type, so
+#  $o1 [1st Perl example] and $o2 [2nd example] have a number of
+#  methods (typeof, is_struct_type [returns 1 ;], and an over-loaded stringify)
+#
+# Although we do provide the S-Lang struct mutators as object methods
+# I strongly suggest using the native hash interface instead since this
+# is Perl *AND* I do not guarantee these methods will remain [they
+# only exist since they are useful internally when converting 
+# Perl -> S-Lang]
+#
+# S-Lang             Perl
+#  get_field_names()   keys %$o1   *** but NOT 'keys %$o2' I think ***
+#                      keys %foo       ^^^ this could have been due to a bug?
+#
+#  get/set_field()     $$o1{baz}
+#                      $foo{baz}
 #
 # To do:
-#   set_fields() - need to think how interacts with set_field() extension
-#   _push_field_values()
-#
 #   either copy() or dup() -- including Mike Nobles's "field-slicing"
 #     idea, ie $self->copy("-foo"); removes foo
 #
 #==============================================================================
 
-package Inline::SLang::Struct_Type;
+package Struct_Type;
 
 no strict; # stupid way to get package-scoped global
 @ISA = ( "Inline::SLang::_Type" );
@@ -703,130 +1084,115 @@ use strict;
 
 use Carp;
 
-sub is_struct_type { 1; }
-
-# Struct_Type
-# - field names stored as an array
-# - data stored as an associative array
-# - this method is over-ridden for "named" structs
+# first the over-ridden methods from Inline::SLang::_Type
 #
+# new(), TIEHASH(), and _define_struct() are the only methods that
+# will be over-ridden in sub-classes (ie for "named" structs)
+#
+sub is_struct_type() { 1; }
+
 sub new {
-    my $this  = shift;
-    my $class = ref($this) || $this;
-
-    # input can either be an array reference (deprecate this,
-    # or is it easier from C ?) or a list of arguments
-    my @names;
-    if ( $#_ > 0 ) {
-	# all scalars, we hope
-	@names = @_;
-    } elsif ( $#_ == 0 ) {
-	# can be a scalar or array reference
-	my $val = shift;
-	if ( ref($val) eq "ARRAY" ) {
-	    @names = @$val;
-	} elsif ( ref($val) ) {
-	    die "Error: I don't know how to handle a " . ref($val) .
-		" reference";
-	} else {
-	    push @names, $val;
-	}
-    }
-
-    # ensure that the field names are all valid:
-    # - die if name contains a space, begins with a number
-    # - check for multiple versions of the same name
-    # - anything else?
-    #
-    my ( %fields, @fields );
-    foreach my $field ( @names ) {
-        # should check up on S-Lang's allowable names
-	die "Error: field name ($field) is invalid."
-	    if $field =~ m/(\s|^\d)/;
-	die "Error: attempted to use the same field name ($field) twice creating an $class object"
-	    if exists $fields{$field};
-	push @fields, $field;
-    }
-
-    # make the object
-    my $self = {
-	fields => [ @fields ], # a copy, not a reference
-	data   => { map { ($_,undef) } @fields },
-    };
-    bless $self, $class;
-    return $self;
-
-} # sub: new()
-
-# return an array reference of the field names
-# (matches the S-Lang name w/out the 'struct_')
-#
-# - note: we return a reference to a copy of the array
-#         rather than to the array itself
-#   well, that's what I want, but I'm not sure I'm actually doing it...
-#
-sub get_field_names {
-    my $self = shift;
-    return [ @{ $$self{fields} } ];
+  my $this  = shift;
+  my $class = ref($this) || $this;
+  tie( my %self, $class, shift );
+  bless \%self, $class;
 }
 
-# read the field data - the functionality is an extension of that
-# of S-Lang's get_struct_field() since we allow multiple
-# values to be queried at once:
+# this is a private method: user code should *NOT* use this, or even
+# assume it's going to exist in future versions of the module
+# note: we return the hash reference stored within the array
+# reference and NOT the array reference itself
 #
-#   $val  = $obj->get_field("foo");
-#   @vals = $obj->get_field("foo","bar");
-#
-# if the given field name doesn't exist then we die
-#
-sub get_field {
-    my $self = shift;
-    my @ret;
-    foreach my $field ( @_ ) {
-	if ( exists $$self{data}{$field} ) {
-	    push @ret, $$self{data}{$field};
-	} else {
-	    croak( "The " . ref($self) . " object does not contain the field \"$field\"\n" );
-	}
-    }
-    return wantarray ? @ret : $ret[0];
-} # sub: get_field()
+sub _private_get_hashref { return ${ tied( %{$_[0]} ) }[0]; }
 
-# set the field data - the functionality is an extension of that
-# of S-Lang's set_struct_field() since we allow multiple
-# values to be set at once:
+# and now methods that match S-Lang function names
+# I don't particularly want them (there are more Perl like
+# ways to perform these functions), but they are currently
+# used by the Perl -> S-Lang code [see util.c]
 #
-#   $obj->set_field( $field1, $val1, $field2, $val2, ... );
-#
-# if the field doesn't exist then we die
-#
-# NOTE:
-#   may be too confusing with set_fields() [which isn't
-#   implemented yet]
-#
-sub set_field {
-    my $self = shift;
-    my %hash = @_;
-    while ( my ( $field, $value ) = each %hash ) {
-	if ( exists $$self{data}{$field} ) {
-	    $$self{data}{$field} = $value;
-	} else {
-	    croak( "The " . ref($self) . " object does not contain the field \"$field\"\n" );
-	}
-    }
-} # sub: set_field()
+sub get_field_names { return [ keys %{$_[0]} ]; }
+sub get_field { return $_[0]->{$_[1]}; }
+sub set_field { return $_[0]->{$_[1]} = $_[2]; }
 
-# over-ride the default object "stringification"
-# - include structure type for "named" structs
+# now define the tied methods
+
+# unlike all the other tied methods, this one is over-ridden
+# by the classes representing "named" structures since the
+# list of field names is fixed in those cases
 #
-use overload ( "\"\"" => \&Inline::SLang::Struct_Type::stringify );
-sub stringify {
-  my $self = shift;
-  my $string = "Structure Type: " . $self->typeof() . "\n";
-  foreach my $field ( @{ $$self{fields} } ) {
-    $string .= "\t$field\t= $$self{data}{$field}\n";
-  }
-  return $string;
+sub TIEHASH {
+  croak "Usage: tie %hash, '$_[0]', [ list of field names ]"
+    unless $#_ == 1 or ref($_[1]) != "ARRAY";
+
+  my $class  = shift;
+  my $fields = shift;
+  croak "Error: can not create an empty $class object."
+    if $#$fields == -1;
+
+  # [0] = hash reference
+  # [1] = array reference (field names)
+  # [2] = scalar: counter used when iterating through the hash
+  #
+  # note: we do *NOT* set [1] equal to $fields
+  #  instead we ensure we use a copy of this information
+  #
+  my @fieldnames = @$fields; # create a copy
+  my $struct = { map { ($_,undef); } @fieldnames };
+  return bless [ $struct, [@fieldnames], 0 ], $class;
+}
+
+sub FETCH {
+  my ( $impl, $key ) = @_;
+  die "Error: field '$key' does not exit in this " . ref($impl) . " structure\n"
+    unless exists $$impl[0]{$key};
+  return $$impl[0]{$key};
+}
+
+sub STORE {
+  my ( $impl, $key, $newval ) = @_;
+  die "Error: field '$key' does not exit in this " . ref($impl) . " structure\n"
+    unless exists $$impl[0]{$key};
+  $$impl[0]{$key} = $newval;
+}
+
+sub EXISTS {
+  my ( $impl, $key ) = @_;
+  return exists $$impl[0]{$key};
+}
+
+# do not allow a delete
+sub DELETE {
+  my ( $impl, $key ) = @_;
+  die "Error: unable to delete a field from a " . ref($impl) . " structure\n";
+}
+
+# if the user does a clear then we reset all the fields to NULL
+# - not convinced that this behaviour is the best thing to do;
+#   could die on CLEAR?
+#
+sub CLEAR {
+  my ( $impl ) = @_;
+  foreach my $key ( keys %{ $$impl[0] } ) { $$impl[0]{$key} = undef; }
+  $$impl[2] = 0; # is this needed?
+}
+
+# hope that we get the iteration handled correctly: we try
+# and use the order of the keys in the S-Lang structure as 
+# the order of the iteration
+#
+sub FIRSTKEY {
+  my ( $impl ) = @_;
+  $$impl[2] = 1; # the next key to get is element 1
+  return $$impl[1][0];
+}
+
+# if we've exceeded the number of fields then we do nothing
+sub NEXTKEY {
+  my ( $impl ) = @_;
+  my $curr = $$impl[2];
+  return undef if $curr > $#{$$impl[1]};
+  $$impl[2]++;
+  return $$impl[1][$curr];
 }
 
 ## private methods for this object (no guarantee they will
@@ -837,27 +1203,256 @@ sub stringify {
 # (since this would convert it back into Perl which we don't want)
 #
 # we make this code also handle the case when called from a sub-class
-# of Inline::SLang::Struct_Type
+# of Struct_Type
 #
 sub _define_struct {
   my $self  = shift;
-  my $class = ref($self) ||
-    die "Error: Inline::SLang::Struct_Type::_define_struct() can not be called as a class method";
-  $class = substr( $class, 15 );
-  if ( $class eq "Struct_Type" ) {
-    return "\$1 = struct { " . join( ', ', @{ $$self{fields} } ) . " };";
-  } else {
-    return "\$1 = \@$class;"; # a lot easier ;)
-  }
-
+  my $class = ref($self) or
+    die "Error: Struct_Type::_define_struct() can not be called as a class method";
+  return "\$1 = struct { " . join( ', ', keys %$self ) . " };";
 } # sub: _define_struct()
 
 #==============================================================================
-# Inline::SLang::DataType_Type
+# Array_Type
+#
+#  Handle arrays: was going to use a tied array but decided against this
+#  since it's not obvious how to handle > 1D arrays in this scheme; ie
+#     sl = Int_Type [1,3,2];
+#  when converted to a tied array would probably have to be
+#     pl = ref to tied 1D array with 1 element
+#            element is a tied 1D array with 3 elements
+#              element is a tied 1D array with 2 values
+#  to allow $$pl[0][2][1] to access an element. And that can't be
+#  remotely efficient. Plus we'd need to add methods to allow slicing/indexing
+#
+#  So I'm going to see how a straight Perl object does: ie have to use
+#  methods as mutators rather than rely on Perl syntax/base datatypes.
+#
+# Usage:
+#   $a = Assoc_Type->new( "Int_Type", [1,3,2] [, $aref ] );
+#   $a = Assoc_Type->new( DataType_Type->new("Int_Type"), [1,3,2], [$aref] );
+# 
+# $aref is an array reference of the data being sent in which we
+# assume matches the supplied datatype and size -- it's the user's
+# fault if it isn't. Note: we do NOT copy the data - so if the user
+# changes the data using $aref then they're likely to be surprised
+#
+#   $val = $a->get(0,2,1);
+#   $a->set(0,2,1,$newval);
+#
+#   $a->reshape/_reshape - need to read S-Lang docs again!
+#
+#   $a->index( [0,1,3] ); only for 1D arrays
+#
+#   ( \@dims, $ndims, $array_type ) = $a->array_info()
+#
+#   $a->toPerl();   return the internal copy of the array; beware!!
+#
+# To Do:
+#   allow slicing?
+#
+#==============================================================================
+
+package Array_Type;
+
+no strict; # stupid way to get package-scoped global
+@ISA = ( "Inline::SLang::_Type" );
+use strict;
+
+use Carp;
+
+# first the over-ridden methods from Inline::SLang::_Type
+#
+
+sub _fill_in_blank_array ($);
+
+sub new {
+  my $this   = shift;
+  my $class  = ref($this) || $this;
+  my $narg = 1 + $#_;
+  croak "Usage: \$obj = $class" . "->new( Type, \\\@arraydims [, \$aref ] );"
+    unless
+      $narg > 1 and $narg < 4 and
+      ( ref($_[0]) eq "" or UNIVERSAL::isa($_[0],"DataType_Type")) and
+      ref($_[1]) eq "ARRAY" and
+      ( $narg == 2 or ref($_[2]) eq "ARRAY" );
+  my $intype = shift;
+  my $dims   = shift;
+  my $aref   = $narg == 3 ? shift : undef;
+
+  my $type;
+  if ( UNIVERSAL::isa($intype,"DataType_Type") ) {
+    $type = $intype;
+  } else {
+    $type = DataType_Type->new($intype) ||
+      die "Error: unrecognised type $intype when creating $class object";
+  }
+
+  # [0] = array reference
+  # [1] = DataType_Type object (type of array)
+  # [2] = array reference: array dims
+  #
+  # note that we start off with an array of undef's
+  # - although we amy want to change that to the default
+  #   value for the type
+  # OR we just use the value that was sent in for the data
+  # [with ***NO*** validity checking and ***NO*** copying]
+  #
+  # note that I try and ensure we use copies of the dim array here
+  if ( $narg == 3 ) {
+    return bless [ $aref, $type, [@$dims] ], $class;
+  } else {
+    return bless [ _fill_in_blank_array( [@$dims] ), $type, [@$dims] ], $class;
+  }
+}
+
+sub toPerl  { return ${$_[0]}[0]; } # note: this is NOT a copy
+sub _typeof { return ${$_[0]}[1]; }
+
+## object methods
+
+# changes the $coords array in place if necessary
+sub _validate_pos {
+  my $fname  = shift;
+  my $dims   = shift;
+  my $coords = shift;
+
+  my $ndims   = $#$dims;
+  my $ncoords = $#$coords;
+  die "Error: ${fname}() called with " . (1+$ncoords) .
+      " coordinates but array dimensionality is " . (1+$ndims) . "\n"
+      unless $ncoords == $ndims;
+  foreach my $i ( 0 .. $ncoords ) {
+    my $pos  = $$coords[$i];
+    my $npts = $$dims[$i];
+    die "Error: coord #$i of ${fname}() call (val=$pos) lies outside valid range of -$npts:" . ($npts-1) . "\n"
+      if $pos < -$npts or $pos > $npts-1;
+    $$coords[$i] += $npts if $pos < 0;
+  }
+} # sub: _validate_pos
+
+sub get {
+  my $self = shift;
+  my $aref = $$self[0];
+  my $dims = $$self[2];
+  my @pos  = @_;
+  _validate_pos( "get", $dims, \@pos );
+  # return the value
+  my $ref = $aref;
+  foreach my $indx ( @pos ) {
+    $ref = $$ref[ $indx ];
+  }
+  return $ref;
+} # sub: get
+
+sub set {
+  my $self = shift;
+  my $aref = $$self[0];
+  my $dims = $$self[2];
+  my $newval = pop;
+  my @pos  = @_;
+  _validate_pos( "set", $dims, \@pos );
+  # set the value
+  my $ref = $aref;
+  my $lastpos = pop @pos;
+  foreach my $indx ( @pos ) {
+    $ref = $$ref[ $indx ];
+  }
+  return $$ref[$lastpos] = $newval;
+} # sub: set
+
+# (Array_Type, Integer_Type, DataType_Type) array_info (Array_Type a)
+#
+# note: we return the dimensions as a Perl array reference, not
+# as an Array_Type object. We make sure to send a copy of it
+#
+sub array_info {
+  my $self = shift;
+  return ( [ @{$$self[2]} ], 1+$#{$$self[2]}, $$self[1] );
+} # sub: array_info
+
+# can I be bothered with these?
+sub reshape  { die "ERROR: reshape method not yet available\n"; }
+sub _reshape { die "ERROR: _reshape method not yet available\n"; }
+sub index    { die "ERROR: index method not yet available\n"; }
+
+# this is a private method: user code should *NOT* use this, or even
+# assume it's going to exist in future versions of the module
+# [we have a C version of this algorithm]
+#
+# NOT efficient
+# and may want to set the default value following S-Lang, e.g.:
+#   number -> 0
+#   cplx number -> 0+0i
+#   datatype -> Undefined_Type
+#   struct, string, ... -> NULL
+#
+sub _fill_in_blank_array ($) {
+  my $dims = shift;
+  my $dim  = (shift @$dims) - 1;
+
+  # create the array
+  my @array;
+  $#array = $dim;
+
+  # do we need to fill the array in?
+  if ( $#$dims > -1 ) {
+      foreach my $i ( 0 .. $dim ) {
+          # ensure we send in a copy, hence [@..]
+	  $array[$i] = _fill_in_blank_array( [ @$dims ] );
+      }
+  } else {
+      foreach my $i ( 0 .. $dim ) {
+          # could set to default value for the type
+	  $array[$i] = undef;
+      }
+  }
+  return \@array;
+} # sub: _fill_in_blank_array
+
+# these are private methods: user code should *NOT* use thes, or even
+# assume they're going to exist in future versions of the module
+#
+# for speed we de-reference the DataType_Type object directly in
+# _private_get_typeof rather than call stringify on it
+sub _private_get_arrayref { return $_[0][0]; }
+sub _private_get_typeof   { return ${ $_[0][1] }; }
+sub _private_get_dims     { return $_[0][2]; }
+
+# utility routines called as a class method - ie not on an object
+# - used in util.c because I'm too lazy to do it in C
+#
+sub _private_get_assign_string {
+  my $ndim = 1+shift;
+  return
+    join('', map { "\$$_=();" } reverse(1..$ndim+2)) .
+    "\$1[" . join(',', map { "\$$_" } (2..$ndim+1) ) .
+    "]=\$" . ($ndim+2) . ";";
+}
+sub _private_get_read_string {
+  my $ndim = 1+shift;
+  return
+    join('', map { "\$$_=();" } reverse(2..$ndim+1)) .
+    "\$1;\$1[" . join(',', map { "\$$_" } (2..$ndim+1) ) .
+    "];";
+}
+
+# returns the S-Lang code necessary to create an array of the
+# correct size and dimensionality
+#
+sub _private_define_array {
+  my $self  = shift;
+  my $class = ref($self) or
+    die "Error: Array_Type::_define_array() can not be called as a class method";
+  return "\$1 = $$self[1] [ " . join(',',@{$$self[2]}) . " ];";
+} # sub: _private_define_array()
+
+#==============================================================================
+# DataType_Type
 #
 # - the type is returned as a string (which is the output of
 #   'typeof(foo);' for the S-Lang variable foo)
-# - the string is blessed into the Inline::SLang::DataType_Type object
+# - the string is blessed into the DataType_Type object
 # - we use S-Lang to create a DataType_Type variable so that we can
 #     a) check we have a datatype
 #     b) handle type synonyms correctly
@@ -867,7 +1462,7 @@ sub _define_struct {
 #
 #==============================================================================
 
-package Inline::SLang::DataType_Type;
+package DataType_Type;
 
 no strict; # stupid way to get package-scoped global
 @ISA = ( "Inline::SLang::_Type" );
@@ -884,18 +1479,24 @@ sub new {
     my $self  = shift || "DataType_Type";
 
     # this will convert class synonyms to their "base" class
+    # - naively one would do something like
     #
-    # I guess with clever coding then you could get S-Lang
-    # to evaluate something here, but I am not going to worry about
-    # that (since you can call sl_eval() directly...)
+    #     ( $flag, $val ) = Inline::SLang::sl_eval(
+    #       "typeof($self)==DataType_Type;string($self);"
+    #      );
+    #
+    # but this means the S-Lang stack is cleared [by sl_eval] which
+    # is not good since this constructor can be called within sl2pl/pl2sl
+    # [particularly when converting assoc arrays], which means that
+    # the S-Lang stack gets hosed
+    #
+    # Hence we have a hard-coded function to do what we want
+    # [which can still fail, so we still need to wrap it in an eval block]
     #
     my ( $flag, $val );
     eval qq{
-      ( \$flag, \$val ) =
-        Inline::SLang::sl_eval(
-          "typeof($self)==DataType_Type;string($self);"
-        );
-    };
+      ( \$flag, \$val ) = Inline::SLang::_sl_isa_datatype(\$self);
+     };
 
     # return undef on failure
     return undef unless defined $flag and $flag;
@@ -907,53 +1508,8 @@ sub new {
 # since we actually want to print out the actual datatype,
 # and not that this is a DataType_Type object
 #
-use overload ( "\"\"" => \&Inline::SLang::DataType_Type::stringify );
+use overload ( "\"\"" => \&DataType_Type::stringify );
 sub stringify { return ${$_[0]}; }
-
-#==============================================================================
-# Inline::SLang::Assoc_Type
-#
-# Let's try and handle Assoc_Type arrays as tied hashes so that we can retain
-# knowledge of the S-Lang type of the fields.
-#
-#==============================================================================
-
-=begin FORTHEFUTURE
-
-package Inline::SLang::Assoc_Type;
-
-require Tie::Hash;
-
-no strict; # stupid way to get package-scoped global
-@ISA = qw( "Tie::ExtraHash" );
-use strict;
-
-# Usage:
-#   tie %foo, Inline::SLang::Assoc_Type;
-#   tie %foo, Inline::SLang::Assoc_Type, "Any_Type";
-#   tie %foo, Inline::SLang::Assoc_Type, "String_Type";
-#   tie %foo, Inline::SLang::Assoc_Type, "Array_Type"; ???
-#
-# these correspond to S-Lang's
-#
-#   variable foo = Assoc_Type [];
-#   variable foo = Assoc_Type [Any_Type];
-#   variable foo = Assoc_Type [String_Type];
-#   variable foo = Assoc_Type [Array_Type];
-#
-# At the moment we do not allow the default value, although that should
-# be easy to implement
-#
-# the object is a 2-element array: the first element is the hash
-# reference that Tie::ExtraHash needs; the second is a string representing
-# the type of the data stored in the array
-#
-
-# or at least that's the plan
-
-=end FORTHEFUTURE
-
-=cut
 
 #==============================================================================
 

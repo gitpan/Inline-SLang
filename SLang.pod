@@ -4,11 +4,11 @@ Inline::SLang - Write Perl subroutines in S-Lang.
 
 =head1 SYNOPSIS
 
+  use Inline SLang;
+
   print "9 + 16 = ", add(9,16), "\n";
   print "9 - 16 = ", subtract(9,16), "\n";
   print JAxH('Inline'), "\n";
-
-  use Inline SLang;
 
   __END__
   __SLang__
@@ -22,11 +22,6 @@ Inline::SLang - Write Perl subroutines in S-Lang.
   }
 
 =head1 DESCRIPTION
-
- ***
- *** This is currently a pre alpha release.
- *** Use at your own risk
- ***
 
 The C<Inline::SLang> module allows you to put S-Lang source code
 directly "inline" in a Perl script or module. It sets up an in-process
@@ -65,21 +60,10 @@ can be found in L<Inline::SLang::Config>.
 For more details on C<Inline>, see L<Inline> or
 C<perldoc Inline>.
 
- ***
- *** The following looks like it should be okay, although
- *** comments/thoughts/suggestions are more than welcome
- *** The mapping of S-Lang namepace to Perl package for
- *** the functions may cause issues: perhaps namespace
- *** 'foo' should map to package SLang::foo to make things
- *** "cleaner"? Although this implictly creates the SLang
- *** namespace for packages which hasn't been passed through
- *** modules@perl.org
- ***
+=head2 S-Lang Functions
 
-=head2 Functions
-
-Using functions defined in S-Lang is just like using Perl subs. You
-just supply the source code to Inline::SLang - see the
+Using functions defined in S-Lang is just like using Perl subroutines.
+You just supply the source code to Inline::SLang - see the
 L<Inline manual|Inline> for the various ways of doing this -
 and then use them in your Perl code. For example:
 
@@ -110,9 +94,9 @@ when mapped to Perl, does not clobber an existing value
 So I<beware> when you define a S-Lang function called 
 C<open()>!
 
-=head2 Variables
+=head2 S-Lang Variables
 
-We currently do not bind any variables to Perl.
+We currently do not bind any S-Lang variables to Perl.
 To access variables you have to write S-Lang routines
 that read/write the variable, as shown by the
 C<foo()> and C<bar()> routines below:
@@ -121,17 +105,10 @@ C<foo()> and C<bar()> routines below:
   define foo()  { return foobar; }
   define bar(x) { foobar = x; }
 
-It should not be too hard to also bind variables to Perl
-functions; this would make it easy to read, but setting
-them would (?) require making use of the I<lvalue> support
-in modern versions of Perl. 
-Currently it's not a very high priority issue (and may never be).
+It should be possible to also bind variables, but this
+is not a high priority (and may never be).
 
 =head2 Supported Data Types
-
- ***
- *** Guess what, it's not seamless at the moment!
- ***
 
 Inline::S-Lang attempts to seamlessly convert between 
 Perl and S-Lang data types. 
@@ -140,6 +117,7 @@ where there is a direct match between S-Lang and Perl, the
 conversion is not noticeable. For more complicated
 types - such as complex numbers - S-Lang variables are
 converted to Perl objects.
+Where possible a I<perlish> interface is retained.
 See L<Inline::SLang::Types>
 for more information on how the various data types are
 supported.
@@ -147,42 +125,151 @@ supported.
 The module currently assumes that yor S-Lang library has been compiled
 with support for both floating-point and complex numbers.
 
-Note that, in version 0.05, the support is much better
-for converting from S-Lang to Perl than the other way around.
+=head2 Perl routines
+
+The module provides several utility functions which are 
+discussed below. By default they are only available
+using fully-qualified names - e.g. C<Inline::SLang::sl_eval()> -
+although the C<EXPORT> 
+L<configuration option|Inline::SLang::Config/EXPORT>
+can be used to change this.
+
+=head3 Inline::SLang::sl_array
+
+=head4 Usage:
+
+  $sl = Inline::SLang::sl_array( $aref );
+  $sl = Inline::SLang::sl_array( $aref, $adims );
+  $sl = Inline::SLang::sl_array( $aref, $atype );
+  $sl = Inline::SLang::sl_array( $aref, $adims, $atype );
+
+This is a wrapper around the C<Array_Type> constructor
+and is intended to make it easy to ensure that a Perl array
+reference is converted into a S-Lang array of the correct
+type, dimensionality, and size.
+
+The data is stored in C<$aref>, a Perl array reference. If
+no other parameters are supplied then the array dimensions,
+size, and type are I<guessed> from C<$aref>. Since Perl has such a 
+flexible type system the routine can sometimes make a surprising
+choice for the data type of the array, so it may well be worth
+supplying the array type as C<$atype> - which can be either
+a string containing the name of the S-Lang datatype, such as
+C<"Int_Type">, or a C<DataType_Type> object.
+
+If you know the array dimensions then it's probably faster
+to supply them as the C<$adims> argument, which should
+be an array reference.
+
+Note that there is limited error checking in this routine:
+if C<$aref> is a 2x3 array but you send in C<$adims> as
+C<[3,2]> - or C<[24]> say - then expect weird behaviour
+at the very least. 
+
+=head4 Example:
+
+  use Inline 'SLang' => Config => EXPORT => [ "sl_array" ];
+  use Inline 'SLang';
+  ...
+  some_slang_func( sl_array([[1.0,0.0],[0.0,1.0]],"Double_Type") );
+
+For numeric types I expect most people to use piddles
+(i.e. the L<Perl Data Language|PDL> support that is not yet
+available). This routine is more useful for arrays of
+non-numeric data types.
+
+=head3 Inline::SLang::sl_eval
+
+=head4 Usage
+
+  [ retval(s) = ] Inline::SLang::sl_eval( $str );
+
+This function evaluates the supplied S-Lang code (in C<$str>)
+and converts any return values to Perl.
+In general this will not be needed,
+since you can always call S-Lang's C<eval()> function
+via a wrapper function (or by binding it to a different
+function name in Perl).
+
+=head4 Example:
+
+  my $foo = Inline::SLang::sl_eval("23+4");
+  print "S-Lang thinks 23+4 is $foo\n";
+
+A more flexible solution is to write a S-lang wrapper around
+the S-Lang C<eval()> function (perhaps this should be moved
+into C<sl_eval>?):
+
+  % Call as myeval( "slang code" [, var1, var2, ... ] );
+  % where varX are variables that placed onto the S-Lang
+  % stack before calling the S-Lang code
+  define myeval() {
+    % pop off the slang code from the stack, leave the rest there
+    variable slcode;
+    if ( _NARGS > 1 ) {
+      _stk_reverse(_NARGS);
+      slcode = ();
+      _stk_reverse(_NARGS-1);
+    }
+    else
+      slcode = ();
+    eval( slcode );
+  }
+
+=head3 Inline::SLang::sl_typeof
+
+=head4 Usage:
+
+  $type = Inline::SLang::sl_typeof( $var );
+
+Returns the S-Lang type of the data stored in the Perl
+variable C<$var>. This should be more efficient than
+using S-Lang's C<typeof()> command since it does not
+require the conversion of the whole variable to S-Lang
+(normally not a big issue but it can be if C<$var> contains
+a large array or complicated structure).
+
+The return value is an object of the C<DataType_Type>
+class; see L<PDL::Types|PDL::Types> for more information
+on how S-Lang variables are represented in Perl.
+
+=head4 Example:
+
+  my $foo = some_slang_function();
+  my $type = Inline::SLang::sl_typeof($foo);
+  print "The function returned a $type variable\n";
+
+Note that all objects used to represent S-Lang data types
+- other than C<Math::Complex> objects - have a C<typeof()>
+method which can be used to find the type of the object.
 
 =head1 SUPPORTED PLATFORMS
 
- ***
- *** requirements not yet fixed in stone
- ***
+I do not have the time to support anything but a recent version
+of S-Lang - defined as 1.4.7 or higher - on Solaris and Linux
+machines. This will hopefully extend to Mac OS X and Alpha
+machines in the near future.
 
-The module is designed to work with version 1.4.x of the S-Lang
-library, although I make no promises for anything earlier than 1.4.4.
-In fact, I may up this to about 1.4.9, for ease of testing.
-
-The support for the BIND_NS option is flaky prior to
-v1.4.3 (it appears to be due to S-Lang and not this module).
-Also, use of the "All" option is restricted to those
-systems using version v1.4.7 or higher. So I suggest upgrading!
-
-S-Lang versions tested: 1.4.4 (solaris),
-1.4.8 (linux & solaris)
-
-Inline::S-Lang has so far been tested on Linux and Solaris 2.8
-only. It should work on UNIX platforms; I would be surprised if 
-it works without tweaking on other systems.
-
-Perl versions tested: 5.8.0 (solaris and linux).
+The code is I<NOT> guaranteed to work with an earlier version;
+in fact F<Makefile.PL> should have screamed at you and gone off
+in a sulk if you tried to build againt an earlier version.
 
 It is intended to support Perl versions >= 5.6.0 only (at least the
-release versions rather than the development releases). It is not
+release versions rather than the development releases). However note
+that the development is made using version 5.8.0, and so there
+may be subtle/hidden issues with the 5.6.x series of Perl.
+It is not
 clear yet whether we really need any >= 5.6.0 functionality, but this
 restriction does make testing/developing a lot easier for me.
 
 =head1 BUGS AND DEFICIENCIES
 
-This is I<pre-alpha> release code. So, by design,
+This is I<alpha> release code. So, by design,
 there will be lots of bugs and deficiencies.
+
+Please use the CPAN Resource Tracker at
+http://rt.cpan.org/NoAuth/Bugs.html?Dist=Inline-SLang
+to check for bugs, report new ones, and request new features.
 
 =head1 SEE ALSO
 
@@ -205,16 +292,89 @@ any way related to the above people.
 
 =head1 CHANGES
 
-=over 4
+=over 2
+
+=item v0.10 Sat May  3 19:39:00 EDT 2003
+
+There have been a number of significant enhancements
+and changes in this release, which is why the release
+number has been bumped-up to the lofty heights of
+I<0.10>.
+
+The really-short summary is that all variables should now
+be supported and the support for S-Lang's associative
+arrays, normal arrays, and structures has been made much 
+-more Perl like.
+
+=over 2
+
+=item *
+
+Support for S-Lang libraries earlier than 1.4.7 has been discontinued.
+
+=item *
+
+Perl class names have been changed from C<Inline::SLang::XXX> to
+C<XXX>.
+
+=item *
+
+S-Lang structs (both C<Struct_Type> and named structs) are stored
+using a Perl object (also called C<Struct_Type>)
+which can be treated as a hash reference.
+As an example, if the S-Lang structure has a field C<x> and
+it is stored in the Perl variable C<$foo> then you can
+access the field as C<$$foo{x}>.
+
+=item *
+
+S-Lang C<Assoc_Type> arrays are now converted to the Perl
+C<Assoc_Type>
+class (and vice-versa). This object can be treated as a hash
+reference.
+When calling S-Lang functions, hash references
+are converted to S-Lang as an C<Assoc_Type [Any_Type]> array.
+
+=item *
+
+Arrays can now be converted between Perl (array
+references or Perl C<Array_Type> objects)
+and S-Lang (C<Array_Type> variables) for any
+S-Lang data type.
+Any dimension of array supported by S-Lang is now
+available (in previous only one and two dimensional
+arrays could be used).
+
+Support for piddles is I<not yet available> (planned soon).
+
+=item *
+
+Several Inline::SLang::XXX routines can now be exported to Perl's
+main package by use of the EXPORT configuration option (rather than
+the standard Perl way of using 'use foo qw( ... );'. This can be
+looked at as something of a hack.
+
+=item *
+
+Handling of S-Lang errors has been improved: they are now caught
+and then converted into Perl errors (i.e. calls to C<croak>).
+This means that calling DataType_Type->new() with an unknown type
+name no longer results in S-Lang error messages printed to STDERR
+(which it did in 0.06).
+
+=item *
+
+fixed mem leak when converting structs from Perl to S-Lang. Note that
+the code used *may* trigger a mem leak in the S-Lang library if you
+are using a version < 1.4.9.
+
+=back
 
 =item v0.06 Thu Apr  3 22:36:54 EST 2003
 
-Note that in the next release the class names for objects will be
-shortened from Inline::SLang::Foo_Type to Foo_Type.
-
 Notable changes are:
 
-=over 4
+=over 2
 
 =item *
 
@@ -258,7 +418,7 @@ tree by 'make install'.
 
 Notable changes are:
 
-=over 4
+=over 2
 
 =item *
 
@@ -309,7 +469,7 @@ has been moved to L<Inline::SLang::Config>.
 
 Notable changes are:
 
-=over 4
+=over 2
 
 =item *
 
@@ -356,7 +516,7 @@ Doug Burke <djburke@cpan.org>
 
 This software is Copyright (C) 2003 
 Smithsonian Astrophysical Observatory.
-All rights are course reserved. 
+All rights are reserved. 
 
 It is released under the GNU General Public License.
 You may find a copy of this licence in the file 

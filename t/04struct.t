@@ -1,13 +1,14 @@
 #
 # test in/out of structures
 #
-# we also test the Inline::SLang::Struct_Type object
-# (since it's our object we'd best test it!)
+# Note that the get_struct_field_names/get_struct/set_struct
+# methods are not explicitly tested here since they're implicitly
+# tested when we convert a struct from Perl to S-Lang
 #
 
 use strict;
 
-use Test::More tests => 39;
+use Test::More tests => 64;
 
 use Inline 'SLang';
 
@@ -35,110 +36,236 @@ my ( $ret1, $ret2, $ret3, @ret );
 
 $ret1 = struct1();
 ##print Dumper( $ret1 ), "\n";
-isa_ok( $ret1, "Inline::SLang::Struct_Type" );
+print Dumper( tied(%$ret1) ), "\n";
+isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Inline::SLang::_Type" );
 ok( $ret1->is_struct_type, "and we are a structure" );
 
-ok( eq_array( $ret1->get_field_names,
+ok( eq_array( [ keys %$ret1 ],
 	      [ "f1", "f2", "f4", "f3" ] ),
     "  contains the correct fields (in the right order)" );
-is( $ret1->get_field("f1"),    1, "    f1 == 1" );
-is( $ret1->get_field("f2"), "f2", "    f2 == 'f2'" );
-ok( eq_array( $ret1->get_field("f4"), [1,2,3]),
+is( $$ret1{f1},    1, "    f1 == 1" );
+is( $$ret1{f2}, "f2", "    f2 == 'f2'" );
+ok( eq_array( $$ret1{f4}, [1,2,3]),
     "    f4 == [1,2,3]" );
-is( $ret1->get_field("f3"), undef, "    f3 == undef" );
+is( $$ret1{f3}, undef, "    f3 == undef" );
 
-$ret1->set_field("f1",2);
-is( $ret1->get_field("f1"), 2, "changed f1 to 2" );
+$$ret1{f1} = 2;
+is( $$ret1{f1}, 2, "changed f1 to 2" );
 
-$ret1->set_field("f2",-1,"f3",-2.1);
-ok( eq_array( [$ret1->get_field("f2","f3")], [-1,-2.1] ),
+@$ret1{qw(f2 f3) } = ( -1, -2.1 );
+ok( eq_array( [@$ret1{qw(f2 f3)}], [-1,-2.1] ),
     "changed f2 to -1 & f3 to -2.1" );
 
 # test stringification on an easy structure
 $ret1 = struct2();
-is(
-   "$ret1",
-   "Structure Type: Struct_Type\n" .
-   join( "", map { "\t$$_[0]\t= $$_[1]\n" } ( ["x1","a string"], ["y2","another string"] ) ),
-   "The stringification works"
-   );
+is( "$ret1", "Struct_Type", "The stringification works" );
 
 # check we play nicely with the stack
 ( $ret1, $ret2, $ret3 ) = ret_multi();
 ok( $ret1 == "more strings" && $ret3 == -234.5,
   "multi return: non-struct vals okay" );
-isa_ok( $ret2, "Inline::SLang::Struct_Type" );
-ok( !defined($ret2->get_field("gonzo")), "and structure field is NULL/undef" );
+isa_ok( $ret2, "Struct_Type" );
+ok( exists $$ret2{gonzo} && !defined($$ret2{gonzo}),
+  "and structure field is NULL/undef" );
 
 # test type-deffed structures
 $ret1 = retbar();
 isa_ok( $ret1, "Inline::SLang::_Type" );
-isa_ok( $ret1, "Inline::SLang::Struct_Type" );
-isa_ok( $ret1, "Inline::SLang::Bar_Type" );
+isa_ok( $ret1, "Struct_Type" );
+isa_ok( $ret1, "Bar_Type" );
 is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
 
-ok( eq_array( $ret1->get_field_names, [ "foo", "bar" ] ),
+ok( eq_array( [keys %$ret1], [ "foo", "bar" ] ),
     "  and contains the correct fields (in the right order)" );
-is( $ret1->get_field("foo"),     2, "    foo == 2" );
-is( $ret1->get_field("bar"), "baz", "    bar == 'baz'" );
-is(
-   "$ret1",
-   "Structure Type: Bar_Type\n" .
-   join( "", map { "\t$$_[0]\t= $$_[1]\n" } ( ["foo",2], ["bar","baz"] ) ),
-   "  and the stringification works"
-   );
+is( $$ret1{foo},     2, "    foo == 2" );
+is( $$ret1{bar}, "baz", "    bar == 'baz'" );
+is( "$ret1", "Bar_Type", "  and the stringification works" );
 
-## Perl 2 S-Lang
+## Perl objects
 
-# first test the object constructor
+# first test the tie interface
+# - in general you should *NOT* be doing this; use
+#   the object constructor instead
 #
-$ret1 = Inline::SLang::Struct_Type->new( ['a','x','a_space'] );
+# [we've implicitly tested all this earlier, so I expect
+#  that these tests aren't actually helping us]
+#
+my %ret;
+eval {
+  tie %ret, 'Struct_Type', ['x', 'a', 'a_space'];
+};
+is( $@, "", "Can tie a \% array to Struct_Type" );
+ok( eq_array( [keys %ret], ["x","a","a_space"] ),
+	"  and fields in correct order" );
+my $label = "  able to set fields in hash array";
+@ret{qw( x a )} = ( 'a string', [1,2,4] );
+is( $ret{x}, "a string", $label );
+is( $ret{a_space}, undef, $label );
+ok( eq_array( $ret{a}, [1,2,4] ), $label );
+
+# if we try and set a field that doesn't exist we shold fail
+eval {
+  $ret{does_not_exist} = 23;
+};
+like( $@,
+      qr/^Error: field 'does_not_exist' does not exit in this Struct_Type structure/,
+      "Unable to create a field that does not exist" );
+
+# can we clear the array?
+%ret = ();
+ok( eq_array( [keys %ret], ["x","a","a_space"] ),
+	"Fields still exist after clearing struct" );
+ok( !defined $ret{a}, "  and have been set to undef" );
+
+# now test the object constructor
+#
+$ret1 = Struct_Type->new( ['a','x','a_space'] );
 ##print Dumper( $ret1 ), "\n";
-isa_ok( $ret1, "Inline::SLang::Struct_Type" );
+isa_ok( $ret1, "Struct_Type" );
 isa_ok( $ret1, "Inline::SLang::_Type" );
 ok( $ret1->is_struct_type, "and we are a structure" );
 
-# have tested set_field() above, but repeat
+# have tested setting the fields above, but repeat
 # - note leave 'a_space' as undef
-my $label = "  able to set fields in created structure";
-$ret1->set_field( "x" => 'a string', 'a' => [1,2,4] );
-is( $ret1->get_field("x"), "a string", $label );
-is( $ret1->get_field("a_space"), undef, $label );
-ok( eq_array( $ret1->get_field("a",), [1,2,4] ), $label );
-
-# debug: currently can't convert an array reference form perl to S-Lang, so change field a
-$ret1->set_field( 'a' => 1.2 );
+$label = "  able to set fields in created structure";
+@$ret1{qw( x a )} = ( 'a string', [1,2,4] );
+is( $$ret1{x}, "a string", $label );
+is( $$ret1{a_space}, undef, $label );
+ok( eq_array( $$ret1{a}, [1,2,4] ), $label );
 
 # now, can we convert it to a S-Lang Struct_Type?
-ok( is_a_struct($ret1),
-    "Can convert Inline::SLang::Struct_Type to Struct_Type" );
-ok( check_struct_fields($ret1,"a","x","a_space"),
+is( is_a_struct($ret1), 1,
+    "Can convert Perl Struct_Type to S-Lang Struct_Type" );
+is( check_struct_fields($ret1,"a","x","a_space"), 1,
 	"  and the field names/order are correct" );
+is( check_struct_valuesa($ret1), 1,
+	"  and the field values are okay" );
 
 # check we don't mess up the stack
-ok( send3("a string",$ret1,Inline::SLang::DataType_Type->new("Float_Type")),
+ok( send3a("a string",$ret1,DataType_Type->new("Float_Type")),
    "Inline::SLang::Struct_Type 2 S-Lang plays okay w/ stack" );
 
 # test type-deffed structures
-$ret1 = Inline::SLang::Bar_Type->new();
+
+# again, you shouldn't be doing this, but using Bar_Type->new()
+#
+eval { tie %ret, 'Bar_Type'; };
+is( $@, "", "Can tie a \% array to a named struct" );
+ok( eq_array( [keys %ret], [ "foo", "bar" ] ),
+    "  and contains the correct fields (in the right order)" );
+$ret{bar} = "far";
+is( $ret{bar}, "far", "  and can set one" );
+
+# now to how they will normally be used
+$ret1 = Bar_Type->new();
+##{ print "bar_type =\n", Dumper(tied(%$ret1)), "\n"; }
 isa_ok( $ret1, "Inline::SLang::_Type" );
-isa_ok( $ret1, "Inline::SLang::Struct_Type" );
-isa_ok( $ret1, "Inline::SLang::Bar_Type" );
+isa_ok( $ret1, "Struct_Type" );
+isa_ok( $ret1, "Bar_Type" );
 is( $ret1->is_struct_type, 1, "typedef {}... returns a structure" );
 
 $label = "  able to set fields in type-deffed structure";
-$ret1->set_field( "bar" => 3, "foo" => "bar" );
-is( $ret1->get_field("foo"), "bar", $label );
-is( $ret1->get_field("bar"), 3, $label );
+@$ret1{qw( bar foo ) } = ( 3, "bar" );
+is( $$ret1{foo}, "bar", $label );
+is( $$ret1{bar}, 3, $label );
+
+##{ print "bar_type =\n", Dumper(tied(%$ret1)), "\n"; }
 ok( check_bar($ret1), "  and can convert to S-Lang" );
 
+is( check_struct_valuesb($ret1), 1,
+	"  and the field values are okay" );
+
 # check we don't mess up the stack
-ok( send3("a string",$ret1,Inline::SLang::DataType_Type->new("Float_Type")),
-   "Inline::SLang::Bar_Type 2 S-Lang plays okay w/ stack" );
+ok( send3b("a string",$ret1,DataType_Type->new("Float_Type")),
+   "Bar_Type 2 S-Lang plays okay w/ stack" );
+
+# test some more features of the tied hash interface:
+#   each [note that we have implicitly tested keys above
+#     so it's probably a wasted check; also with only
+#     2 items we're not really stressing things!]
+#
+my @names;
+my @values;
+while ( my ( $key, $value ) = each %$ret1 ) {
+  push @names, $key;
+  push @values, $value;
+  $$ret1{$key} = $#names;
+}
+ok( eq_array( \@names,  ["foo", "bar"] ), "each returned fields in order" );
+ok( eq_array( \@values, ["bar", 3] ), "  and correct values" );
+ok( eq_array( [@$ret1{qw(bar foo)}], [1,0] ), "  and could change values" );
+
+# create a structure contaiing a structure: "stress" test the
+# conversion code
+#
+$ret1 = Struct_Type->new( [ "goo", "x3", "_bob" ] );
+$$ret1{goo}    = Struct_Type->new( [ "a1", "x1", "q1" ] );
+$$ret1{"x3"}   = Bar_Type->new();
+$$ret1{"_bob"} = Struct_Type->new( [ "a1", "x1", "q1" ] );
+
+$$ret1{goo}{a1} = "a a1";
+$$ret1{goo}{x1} = "a x1";
+$$ret1{goo}{q1} = "a q1";
+$$ret1{"x3"}->set_field( "foo", 23 );
+$$ret1{"x3"}{bar} = 47.3;
+$$ret1{"_bob"}{a1} = 0;
+$$ret1{"_bob"}{x1} = DataType_Type->new();
+$$ret1{"_bob"}{q1} = Math::Complex->make(-4,2);
+
+$ret2 = Bar_Type->new();
+$ret3 = Bar_Type->new();
+$$ret2{foo} = 1;
+$$ret2{bar} = 3;
+$$ret3{foo} = "xfpp";
+$$ret3{bar} = [ [2], [4], [3] ];
+
+ok ( check_silly_obj($ret2,$ret1,$ret3),
+     "Looks like stack isn't messed up [Perl to S-Lang]" );
+
+# and see if can convert to S-Lang and then back into 
+my ( $a, $b, $c ) = ret_silly_obj( $ret2, $ret1, $ret3 );
+
+$label = "Checking Perl>S-Lang>Perl: ";
+ok(
+   UNIVERSAL::isa($a,"Bar_Type") &&
+   UNIVERSAL::isa($b,"Struct_Type") &&
+   UNIVERSAL::isa($c,"Bar_Type"),
+   $label . "correct objs returned" );
+ok( $$ret2{foo} == 1 && $$ret2{bar} == 3, $label . "Bar_Type[2] contents okay" );
+ok( $$ret3{foo} eq "xfpp" && eq_array( $$ret3{bar}, [ [2], [4], [3] ] ),
+	$label . "Bar_Type[3] contents okay" );
+ok( eq_array( [keys %$ret1], ["goo","x3","_bob"] ),
+    $label . "Struct_Type[1] has correct keys" );
+ok(
+   UNIVERSAL::isa($$ret1{goo}, "Struct_Type") &&
+   UNIVERSAL::isa($$ret1{x3},  "Bar_Type") &&
+   UNIVERSAL::isa($$ret1{_bob},"Struct_Type"),
+   $label . "Struct_Type[1] values are structs" );
+ok( eq_array( [@{ $$ret1{goo} }{qw(a1 x1 q1)}], ["a a1","a x1","a q1"] ),
+    $label . "Struct_Type[1] field=goo values okay" );
+ok( eq_array( [@{ $$ret1{x3} }{qw(foo bar)}], [23,47.3] ),
+    $label . "Struct_Type[1] field=x3 values okay" );
+ok(
+   $$ret1{_bob}{a1} == 0 &&
+   UNIVERSAL::isa($$ret1{_bob}{x1},"DataType_Type") &&
+   $$ret1{_bob}{x1}->stringify eq "DataType_Type" &&
+   UNIVERSAL::isa($$ret1{_bob}{q1},"Math::Complex") &&
+   $$ret1{_bob}{q1}->Re == -4 &&
+   $$ret1{_bob}{q1}->Im == 2,
+   $label . "Struct_Type[1] field=_bob values okay" );
 
 __END__
 __SLang__
+
+#ifndef sum
+define sum(x) { variable tot = 0; foreach ( x ) { tot += (); } return tot; }
+#endif
+define all(x) { return sum(x!=0) == length(x); } % assumes 1D
+define any(x) { return sum(x!=0) != 0; } % assumes 1D
+
+define dbg(x) { vmessage(">>> [%s]", x); }
+%%define dbg(x) { }
 
 define struct1 () {
   variable a = struct { f1, f2, f4, f3 };
@@ -163,6 +290,7 @@ define ret_multi () {
 
 % test
 typedef struct { foo, bar } Bar_Type;
+
 define retbar() {
   variable bar = @Bar_Type;
   bar.foo = 2;
@@ -173,16 +301,6 @@ define retbar() {
 %% Perl 2 S-Lang
 
 define is_a_struct (x) { return is_struct_type(x); } 
-
-define send3 (x,y,z) {
-  if ( andelse
-       { x == "a string" }
-       { is_struct_type(y) }
-       { z == Float_Type } )
-    return 1;
-  else
-    return 0;
-}
 
 define check_struct_fields () {
   %%_print_stack();
@@ -204,6 +322,38 @@ define check_struct_fields () {
   return 1;
 } % check_struct_fields
 
+define check_struct_valuesa (x) {
+  return x.x == "a string" and x.a_space == NULL and all(x.a == [1,2,4]);
+}
+
+define check_struct_valuesb (x) {
+  return x.foo == "bar" and x.bar == 3;
+}
+
+define send3a (x,y,z) {
+  if ( andelse
+       { x == "a string" }
+       { is_struct_type(y) }
+       { check_struct_fields(y,"a","x","a_space") }
+       { check_struct_valuesa(y) }
+       { z == Float_Type } )
+    return 1;
+  else
+    return 0;
+}
+
+define send3b (x,y,z) {
+  if ( andelse
+       { x == "a string" }
+       { is_struct_type(y) }
+       { check_struct_fields(y,"foo","bar") }
+       { check_struct_valuesb(y) }
+       { z == Float_Type } )
+    return 1;
+  else
+    return 0;
+}
+
 define check_bar(in) {
   if (
     andelse
@@ -214,3 +364,48 @@ define check_bar(in) {
   else
     return 0;
 } % check_bar()
+
+define check_silly_obj (x,y,z) {
+
+  if ( orelse
+       { typeof(x) != Bar_Type }
+       { x.foo != 1 }
+       { x.bar != 3 }
+     ) return 0;
+  variable aval = [ 2,4,3 ];
+  reshape( aval, [3,1] );
+  if ( orelse
+       { typeof(z) != Bar_Type }
+       { z.foo != "xfpp" }
+       { typeof(z.bar) != Array_Type }
+       { _typeof(z.bar) != Int_Type }
+       { any( z.bar != aval ) }
+     ) return 0;
+
+  % break down the check of y into pieces
+  if ( orelse
+       { typeof(y) != Struct_Type }
+       { any( get_struct_field_names(y) != ["goo","x3","_bob"] ) }
+     ) return 0;
+  if ( orelse
+       { typeof(y.goo)  != Struct_Type }
+       { typeof(y.x3)   != Bar_Type }
+       { typeof(y._bob) != Struct_Type } ) return 0;
+
+  if ( orelse
+       { any( get_struct_field_names(y.goo) != ["a1","x1","q1"] ) }
+       { y.goo.a1 != "a a1" } { y.goo.x1 != "a x1" } { y.goo.q1 != "a q1" }
+     ) return 0;
+  if ( orelse
+       { y.x3.foo != 23 } { y.x3.bar != 47.3 }
+     ) return 0;
+  if ( orelse
+       { any( get_struct_field_names(y._bob) != ["a1","x1","q1"] ) }
+       { y._bob.a1 != 0 } { y._bob.x1 != DataType_Type } { y._bob.q1 != -4+2i }
+     ) return 0;
+
+ return 1;
+} % check_silly_obj
+
+% checks conversion perl to S-Lang to perl is okay
+define ret_silly_obj (x,y,z) { return x, y, z; }

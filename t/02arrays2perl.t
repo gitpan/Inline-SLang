@@ -4,16 +4,17 @@
 # many of these tests shouldn't be direct equality
 # since it's floating point
 #
-# to do:
-# - test > 1D arrays (not yet supported)
-# - are we going to be able to test intrinsic functions like array_map() ?
-#
 
 use strict;
 
-use Test::More tests => 66;
+use Test::More tests => 97;
 
 use Inline 'SLang';
+
+###
+### tell Inline::SLang that we want to convert S-Lang arrays
+### into Perl array references
+###
 
 use Data::Dumper;
 
@@ -113,11 +114,11 @@ is( "$$ret1[1][0] $$ret1[1][1] $$ret1[1][2]",
 $ret1 = array_dtypes();
 is( ref($ret1), "ARRAY", "1D array of DataType_Type's returned as an array reference" );
 is( $#$ret1, 4, "and contains 5 elements" );
-isa_ok( $$ret1[0], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[1], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[2], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[3], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[4], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[0], "DataType_Type" );
+isa_ok( $$ret1[1], "DataType_Type" );
+isa_ok( $$ret1[2], "DataType_Type" );
+isa_ok( $$ret1[3], "DataType_Type" );
+isa_ok( $$ret1[4], "DataType_Type" );
 is( join(" ",map { "$_" } @$ret1), "Array_Type UInteger_Type Float_Type Assoc_Type DataType_Type",
 	"The datatypes are converted correctly" );
 
@@ -127,10 +128,10 @@ is( ref($ret1), "ARRAY", "2D array of data ypes returned as an array reference" 
 is( $#$ret1, 2, "and nx = 3" );
 is( $#{$$ret1[0]}, 1, "and ny = 2" );
 
-isa_ok( $$ret1[0][0], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[0][1], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[1][0], "Inline::SLang::DataType_Type" );
-isa_ok( $$ret1[2][1], "Inline::SLang::DataType_Type" );
+isa_ok( $$ret1[0][0], "DataType_Type" );
+isa_ok( $$ret1[0][1], "DataType_Type" );
+isa_ok( $$ret1[1][0], "DataType_Type" );
+isa_ok( $$ret1[2][1], "DataType_Type" );
 
 # stringify the values as an easy way to check the values
 is( "$$ret1[0][0] $$ret1[0][1]",
@@ -143,40 +144,106 @@ is( "$$ret1[2][0] $$ret1[2][1]",
     "Assoc_Type DataType_Type",
     "  ans[2,*] is correct (2 datatypes)" );
 
-## S-Lang 2 perl: mixed types
-
-( $ret1, $ret2 ) = array_scalar();
-is( ref($ret1), "ARRAY", 'mixed types: returned an array' );
-is( ref($ret2), "",      '             returned a scalar' );
-approx( $$ret1[2],  42.1,    '             mixed types: array [2] okay' );
-is( $ret2,      "aa",    '             scalar okay' );
+## S-Lang 2 perl: Any_Type
+#
+# don't have a de-reference method so can't check the values
+$ret1 = ret_anytype();
+is( ref($ret1), "ARRAY", 'Any_Type array returned as an array' );
+is( $#$ret1, 2, "  with 3 elems" );
+ok( ref($$ret1[0]) && UNIVERSAL::isa($$ret1[0],"Any_Type"), "  and elem0 = Any_Type" );
+ok( ref($$ret1[1]) && UNIVERSAL::isa($$ret1[1],"Any_Type"), "  and elem1 = Any_Type" );
+ok( ref($$ret1[2]) && UNIVERSAL::isa($$ret1[2],"Any_Type"), "  and elem2 = Any_Type" );
 
 ## try some > 1D arrays
 
 $ret1 = array2Di();
 print "2D integer array:\n" . Dumper($ret1) . "\n";
 is( ref($ret1), "ARRAY", '2D: returned an array reference' );
-is( $#$ret1,    1,       '    that is 2D' );
 ok( eq_array( $ret1, [[1,2,2],[9,8,7]] ),
                          '    and contains the correct values [integers]' );
 
 $ret1 = array2Dr();
 print "2D real array:\n" . Dumper($ret1) . "\n";
 is( ref($ret1), "ARRAY", '2D: returned an array reference' );
-is( $#$ret1,    1,       '    that is 2D' );
 ok( eq_array( $ret1, [[1.1,2.2,2.3],[9.4,8.5,7.6]] ),
                          '    and contains the correct values [reals]' );
 
 $ret1 = array2Ds();
 print "2D string array:\n" . Dumper($ret1) . "\n";
 is( ref($ret1), "ARRAY", '2D: returned an array reference' );
-is( $#$ret1,    1,       '    that is 2D' );
 ok( eq_array( $ret1,
 	    [['aa',"cc","x"], ['1','this is a long string', "2"]] ),
                          '    and contains the correct values [strings]' );
 
-__END__
+# 3D
+$ret1 = array3Di();
+print "3D integer array:\n" . Dumper($ret1) . "\n";
+is( ref($ret1), "ARRAY", '3D: returned an array reference' );
+ok( eq_array( $ret1, [[[1,2],[2,9],[8,7]]] ),
+                         '    and contains the correct values [integers]' );
 
+## multi-dimensional but only containing 1 element
+$ret1 = ret_1elem(1);
+is( ref($ret1), "ARRAY", "1D - 1 element returned an array reference" );
+is( $$ret1[0], -2.4,     "     and contents okay" );
+$ret1 = ret_1elem(2);
+is( ref($ret1), "ARRAY", "2D - 1 element returned an array reference" );
+is( $$ret1[0][0], -2.4,     "     and contents okay" );
+$ret1 = ret_1elem(3);
+is( ref($ret1), "ARRAY", "3D - 1 element returned an array reference" );
+is( $$ret1[0][0][0], -2.4,     "     and contents okay" );
+$ret1 = ret_1elem(4);
+is( ref($ret1), "ARRAY", "4D - 1 element returned an array reference" );
+is( $$ret1[0][0][0][0], -2.4,     "     and contents okay" );
+$ret1 = ret_1elem(5);
+is( ref($ret1), "ARRAY", "5D - 1 element returned an array reference" );
+is( $$ret1[0][0][0][0][0], -2.4,     "     and contents okay" );
+$ret1 = ret_1elem(6);
+is( ref($ret1), "ARRAY", "6D - 1 element returned an array reference" );
+is( $$ret1[0][0][0][0][0][0], -2.4,     "     and contents okay" );
+
+# seems to be some complication when using 7D arrays
+# - which appears to be a bug in S-Lang v1.4.9 and earlier
+#$ret1 = ret_1elem(7);
+#is( ref($ret1), "ARRAY", "7D - 1 element returned an array reference" );
+#is( $$ret1[0][0][0][0][0][0][0], -2.4,     "     and contents okay" );
+
+## arrays of a named struct
+$ret1 = ret_foofoo(2);
+is( ref($ret1), "ARRAY", 'arrays of FooFoo_Struct as an array' );
+is( $#$ret1, 1, '  2 elem' );
+ok( $$ret1[0]->typeof->stringify &&
+    $$ret1[1]->typeof->stringify, "  both FooFoo_Struct's" );
+ok( $$ret1[0]{foo1} == 0 && $$ret1[0]{foo2} == 0 &&
+    $$ret1[1]{foo1} == 1 && $$ret1[1]{foo2} == 100,
+    "  and values okay" );
+
+## Check out some stack handling
+
+( $ret1, $ret2 ) = array_scalar();
+is( ref($ret1), "ARRAY", 'mixed types: returned an array' );
+is( ref($ret2), "",      '             returned a scalar' );
+approx( $$ret1[0],  -3.0,    '             mixed types: array [0] okay' );
+approx( $$ret1[1],   0.0,    '             mixed types: array [1] okay' );
+approx( $$ret1[2],  42.1,    '             mixed types: array [2] okay' );
+is( $ret2,      "aa",    '             scalar okay' );
+
+my $ret3;
+($ret1,$ret2,$ret3) = array_multi();
+is( ref($ret1), "ARRAY", 'stack handling: returned an array ref 1' );
+is( ref($ret2), "ARRAY", 'stack handling: returned an array ref 2' );
+is( ref($ret3), "ARRAY", 'stack handling: returned an array ref 3' );
+ok( eq_array($ret1,[[3,4,-2],[3,9,0]]), "  array 1 okay" );
+is( $#$ret2, 1, "  array 2 has 2 elements" );
+ok( ref($$ret2[0]) && UNIVERSAL::isa($$ret2[0],"Struct_Type"), "  contents=Struct_Type" );
+ok( $$ret2[0]{foo} == 1 && $$ret2[0]{bar} eq "x", "    first struct okay" );
+ok( eq_array($$ret2[1]{baz},[1,2,-4]), "    second struct okay" );
+print Dumper($ret3), "\n";
+ok( eq_array($ret3,
+    [[[[[["aa"]]]]],[[[[["q q"]]]]],[[[[["elo"]]]]],[[[[["bob"]]]]]]),
+    "  and third array okay" );
+
+__END__
 __SLang__
 
 %% convert S-Lang to perl
@@ -239,6 +306,15 @@ define array_dtypes2d () {
 % mixed
 define array_scalar() { return ( [-3,0,42.1], "aa" ); }
 
+% Any_Type
+define ret_anytype() {
+  variable a = Any_Type [3];
+  a[0] = 23.4;
+  a[1] = [1,2,3];
+  a[2] = Integer_Type;
+  return a;
+}
+
 % return a 2D array
 define array2Di() {
   variable a = [1,2,2,9,8,7];
@@ -256,6 +332,50 @@ define array2Ds() {
   variable a = ["aa","cc","x","1","this is a long string", "2"];
   reshape(a,[2,3]);
   return a;
+}
+
+% return a 3D array
+define array3Di() {
+  variable a = [1,2,2,9,8,7];
+  reshape(a,[1,3,2]);
+  return a;
+}
+
+define array_multi () {
+  variable x = Int_Type [6];
+  x = [3,4,-2,3,9,0];
+  reshape(x,[2,3]);
+
+  variable y = Struct_Type [2];
+  y[0] = struct { foo, bar };
+  y[1] = struct { baz };
+  y[0].foo = 1;
+  y[0].bar = "x";
+  y[1].baz = [1,2,-4];
+
+  variable z = String_Type [4];
+  z = [ "aa", "q q", "elo", "bob" ];
+  reshape(z,[4,1,1,1,1,1]);
+
+  return x,y,z;
+}
+
+typedef struct { foo1, foo2 } FooFoo_Struct;
+define ret_foofoo(n) {
+  variable out = FooFoo_Struct [n];
+  foreach ( [0:n-1] ) {
+    variable i = ();
+    out[i].foo1 = i;
+    out[i].foo2 = i*100;
+  }
+  return out;
+}
+
+% some "simple" array cases
+define ret_1elem(n) {
+  variable out = [-2.4];
+  reshape(out, [1:n]-[0:n-1]);
+  return out;
 }
 
 %% Convert perl to S-Lang

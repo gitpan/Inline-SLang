@@ -1,13 +1,10 @@
 
+This file contains random musings on the past, present, and future
+state of Inline::SLang. Just because an item has made it here does not
+mean it is going to be worked on in the near (or far) future.
+
 Tests
 -----
-
-- Perl Inline::SLang::Struct_Type objects to S-Lang structs:
-    Leak memory (converting the other way seems okay [is this really
-    true/supported?])
-
-- S-Lang Assoc types to perl:
-    add support for arrays
 
 - check that S-Lang "opaque" variables passed through Perl and back to
   S-Lang still exist once the perl variable that referenced them
@@ -16,13 +13,14 @@ Tests
 S-Lang to Perl
 --------------
 
-- Should Structs use a tied hash? We would disallow creation
-    of fields and provide method to list the order of the
-    fields?
+  - the internal storage mechanism used to store "opaque" types is
+    really inefficient when handled an array of such objects - we need
+    a "random" key
 
-  - improve the support of 1D & 2D arrays
-  - add support for nD arrays
   - use PDL
+
+  - Structs: need to improve checking of valid field names in Perl
+    eg in Perl can use 1x3, but this is not a valid field name in S-Lang
 
  Variables:
   - do we want to allow access to S-Lang variables (ie have them
@@ -31,19 +29,24 @@ S-Lang to Perl
 Perl to S-Lang
 --------------
 
- - array and assoc arrays are the major sticking points.
-   Difficulty is what happens if given ("1.0", "1") since
-   this could be an array of strings or numbers [and, thanks to
-   Perl's DWIMery, it's both]
-
-   Let's try and use tied hash/arrays
+ - Since we know the available datatype names we could make
+   Integer_Type be a short form for DataType_Type->new("Integer_Type")
+   ?????
 
 General
 -------
 
- - decide how to handle errors.
-   Perhaps should install an error handler to allow
-   _sl_eval to return the message in $@ than being printed to STDERR?
+ - some code might be easier if we use dup() to copy the item
+   on the S-Lang stack - so can still pop it off later
+
+ - *could* steal the PDL::NiceSlice array and provide a syntax
+   to access Perl versions of S-lang's arrays/structs - eg
+     $a(0,2,1) gets translated to $a->get(0,2,3)
+     $b.foo                       $$b{foo}
+   BUT this is
+     hard
+     going to clash with PDL
+     going to clash with Perl 6
 
  - how do we support PDL? Should there be an option to convert
    arrays using one of:

@@ -1,20 +1,12 @@
 
-***
-*** Please note that this is a pre-alpha release intended to
-*** garner comments, feed-back, and code.
-***
-*** There is no guarantee that the API/approach will not change
-*** or that this code works, does something useful, or doesn't do
-*** anything horrible to your system. Caveat downloader...
-***
-
 INTRODUCTION
 
-Inline::SLang -- Write Perl subs in S-Lang.
+Inline::SLang -- Write Perl subroutines in S-Lang.
 
 Inline::SLang lets you write Perl subroutines in S-Lang. It dynamically 
 translates the parameters and return values into native data types for 
-both languages.
+both languages (or into Perl classes that are used to represent
+S-Lang types with no direct translation to Perl).
 
 From the S-Lang library home page at http://www.s-lang.org/
 
@@ -29,7 +21,7 @@ Example:
 
    use Inline SLang => <<'END';
    define JAxH(x) {
-     () = printf( "Just Another %s Hacker", x );
+     return sprintf( "Just Another %s Hacker", string(x) );
    }
    END
    print JAxH('Inline'), "\n";
@@ -42,22 +34,15 @@ When run, this complete program prints:
 
 INSTALLATION
 
-This module probably requires Inline.pm version 0.42 or higher to be 
-installed. In addition, you need S-Lang library v1.4.0 or greater installed;
-however, the the development of this module is done mainly against 1.4.4 and
-1.4.8, so there is little support for 1.4.3 and earlier (i.e. I am more
-likely to drop support rather than try and fix/work around issues).
+Perl requirements (see CPAN at http://search.cpan.org/):
+  Perl v5.6.0 or higher.
+  Test::More module (comes with perl 5.8.0)
+  Inline module version 0.42 or higher.
 
-If you want to use the BIND_NS option then I suggest you upgrade to at 
-least v1.4.3, and with v1.4.7 you gain extra functionality (the "All"
-option).
-
-Currently I assume that S-Lang has been compiled with support for
-floating-point and complex numbers.
-
-For the moment I am also making use of the Test::More module for testing.
-I believe this is only a part of Perl since version 5.8.0, so you may need 
-to download it from CPAN (http://search.cpan.org/).
+S-Lang requirements:
+  Version 1.4.7 or higher of the S-Lang library.
+  The code assumes that S-Lang has been compiled with support for
+  floating-point and complex numbers.
 
 To install Inline::SLang do this:
 

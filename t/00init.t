@@ -1,8 +1,11 @@
+#
+# Simple tests of the S-Lang library interface
+#
 
 use strict;
 
 my $loaded = 0;
-BEGIN { use Test::More tests => 2; }
+BEGIN { use Test::More tests => 4; }
 END   { fail( "Able to 'use Inline SLang'" ) unless $loaded; }
 
 ## Tests
@@ -20,12 +23,20 @@ $loaded = 1;
 eval { print JAxH('Inline'); };
 is( $@, "", "We're just another Inline hacker" );
 
-__END__
+# test the error handler
+eval { Inline::SLang::sl_eval( "variable = ;" ); };
+like( $@, qr/^S-Lang Error: Syntax Error: Expecting a variable name: found '=', line 1, file: \*\*\*string\*\*\*/,
+	"Can catch S-Lang error messages via eval" );
 
+# and check that the interpreter is still working
+is( JAxH("re-installed"), "Just Another re-installed Hacker\n",
+	"and the S-Lang interpreter has been re-started" );
+
+__END__
 __SLang__
 
 define somefunc () {}
 
 define JAxH(x) {
-  () = printf( "Just Another %s Hacker\n", x );
+  return sprintf( "Just Another %s Hacker\n", x );
 }

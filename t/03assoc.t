@@ -5,7 +5,7 @@
 
 use strict;
 
-use Test::More tests => 26;
+use Test::More tests => 68;
 
 use Inline 'SLang';
 
@@ -31,16 +31,60 @@ my ( $ret1, $ret2, @ret );
 
 $ret1 = assocarray_uchar();
 print "Assoc array:\n" . Dumper($ret1), "\n";
-is( ref($ret1), "HASH", "Assoc_Array [Uchar_Type] converted to hash array ref" );
+is( ref($ret1), "Assoc_Type", "Assoc_Array [UChar_Type] converted to Assoc_Type object" );
+ok( UNIVERSAL::isa($ret1,"Assoc_Type"), "  checking the same thing" );
+# note: stringify is a private method, used here to make testing easier
+is( $ret1->_typeof()->stringify, "UChar_Type", "  and contains UChar_Type vars" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
      "   keys for assoc array are okay" );
 is( $$ret1{"a"},     1, "  key   a == 1" );
 is( $$ret1{"b b"}, 120, "  key b b == 120" );
 is( $$ret1{"1"},   255, "  key   1 == 255" );
 
+$$ret1{"a"} = 23;
+is( $$ret1{"a"}, 23, "  and can change key a to 23" );
+
+# don't really want users to use these, but may a well check them
+# - note: no guarantee of order of keys
+ok( eq_array( [sort @{ $ret1->get_keys }], [sort ("a", "b b", "1")] ),
+	      "get_keys() works" );
+is( $ret1->get_value("b b"), 120, "and get_key(\"b b\") works" );
+
+# get the order of the keys
+$ret1->set_value("1",24);
+my @order = keys %$ret1;
+my %vals = ( "a" => 23, "b b" => 120, "1" => 24 );
+ok( eq_array( $ret1->get_values(), [map { $vals{$_} } @order] ),
+    "get_values() seems to work as an object method" );
+
+# can we add a value?
+$$ret1{"foo foo"} = 96;
+is( $@, "", "Can set new field 'foo foo'" );
+is( $ret1->get_value("foo foo"), 96, "  and value is correct" );
+
+is( $ret1->length, 4, "Can call length() on object" );
+
+ok( exists $$ret1{"foo foo"},  "exists works for a key that exists" );
+ok( !exists $$ret1{"foo-foo"}, "exists works for a key that exists" );
+
+ok( $ret1->key_exists("foo foo"),  "key_exists() works for a key that exists" );
+ok( !$ret1->key_exists("foo-foo"), "key_exists() works for a key that don't exist" );
+
+$ret1->delete_key( "1" );
+ok( eq_array( [sort keys %$ret1], [sort ( "a", "b b", "foo foo" )] ),
+    "Can delete a key with delete_key()" );
+
+delete $$ret1{"b b"};
+ok( eq_array( [sort keys %$ret1], [sort ( "a", "foo foo" )] ),
+    "Can delete a key with delete" );
+
+# can we clear the array?
+%$ret1 = ();
+ok( eq_array( [keys %$ret1], [] ), "Clearing array clears the array" );
+
 $ret1 = assocarray_string();
 print "Assoc array:\n" . Dumper($ret1), "\n";
-is( ref($ret1), "HASH", "Assoc_Array [String_Type] converted to hash array ref" );
+is( ref($ret1), "Assoc_Type", "Assoc_Array [String_Type] converted to Assoc_Array ref" );
 ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
      "   keys for assoc array are okay" );
 is( $$ret1{"a"},      "aa", '  key   a == "aa"' );
@@ -51,57 +95,96 @@ is( $$ret1{"1"},   "[1:4]", '  key   1 == "[1:4]"' );
 my $ret3;
 ( $ret1, $ret2, $ret3 ) = ret_multi();
 is( $ret1, "a string",  'Returned: 1st elem = string' );
-is( ref($ret2), "HASH", 'Returned: 2nd elem = assoc array' );
+is( ref($ret2), "Assoc_Type", 'Returned: 2nd elem = assoc array' );
 is( $$ret2{"a b q"}, 23, '  and "a b q" = 23' );
 is( $$ret2{"1"},     -4, '  and "1"     = -4' );
 is( $ret3, 22.4,        'Returned: 3rd elem = real' );
 
-TODO: {
-    todo_skip "need to handle SLANG_ARRAY_TYPE arrays", 5;
+# can we have an assoc array of assoc arrays?
+# [ really check out the stack handling ;]
+( $ret1, $ret2, $ret3 ) = ret_assoc2();
 
-    $ret1 = assocarray_array();
-    print "Assoc array:\n" . Dumper($ret1), "\n";
-    is( ref($ret1), "HASH", "Assoc_Array [Array_Type] converted to hash array ref" );
-    ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
-	"   keys for assoc array are okay" );
+is( "$ret1", "Assoc_Type", "Assoc_Type [Assoc_Type] returned an Assoc_Type" );
+is( $ret1->_typeof->stringify, "Assoc_Type", "  and contains Assoc_Type" );
 
-    ok( eq_array( $$ret1{"a"},   [0,1,2,3] ),
-	'  key   a == [0,1,2,3]' );
-    ok( eq_array( $$ret1{"b b"}, [1,2,3,4] ),
-	'  key b b == [1,2,3,4]' );
-    ok( eq_array( $$ret1{"1"},   [0.5,1.0,1.5,2.0] ),
-	'  key   1 == [1,2,3,4]/2' );
+is( "$$ret1{any2}", "Assoc_Type", "  any2 contains Assoc_Type" );
+is( $$ret1{any2}->_typeof->stringify, "Any_Type", "    and it contans Any_Type" );
 
-}
+is( $$ret1{any2}{a}, "aa", "  and field a contains 'aa'" );
+is( $$ret1{any2}{"b b"}, 1.2, "  and field 'b b' contains 1.2" );
 
-TODO: {
-  todo_skip "Unable to handle arrays of Any_Type", 5;
+ok( eq_array( $$ret1{any2}{1}, [1,2,3,4] ),
+    "  and field 1 contains [1:4]" );
 
-  $ret1 = assocarray_any1();
-  print "Assoc array:\n" . Dumper($ret1), "\n";
-  is( ref($ret1), "HASH", "Assoc_Array [] converted to hash array ref" );
-  ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
-      "   keys for assoc array are okay" );
+is( "$$ret1{uchar}", "Assoc_Type", "  uchar contains Assoc_Type" );
+is( $$ret1{uchar}->_typeof->stringify, "UChar_Type", "    and it contans UChar_Type" );
+is( $$ret1{uchar}{1}, 255, "  and field 1 contains 255" );
 
-  is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
-  is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
+ok( UNIVERSAL::isa($ret2,"DataType_Type"), "Stack handling good so far" );
 
-  ok( eq_array( $$ret1{"1"}, [1,2,3,4] ),
-      '  key   1 == [1,2,3,4]' );
-}
+is( ref($ret3), "Assoc_Type", "Last item is an Assoc_Type array" );
+is( $ret3->_typeof->stringify, "Struct_Type", "  and contains Struct_Type" );
+ok( eq_array( [ sort keys %{ $ret3 } ], ["a struct","foo"] ),
+    "  with correct keys" );
+ok( $$ret3{foo}->is_struct_type, "  and foo is a struct" );
+ok( eq_array( [ keys %{ $$ret3{foo} } ], [ "x1" ] ) &&
+    $$ret3{foo}{x1} == 2.3,
+    "  and foo contents are okay" );
+ok( $$ret3{"a struct"}->is_struct_type, "  and 'a struct' is a struct" );
+ok( eq_array( [ keys %{ $$ret3{"a struct"} } ], [ "qq", "pp" ] ) &&
+    $$ret3{"a struct"}{qq} eq "alpha" &&
+    UNIVERSAL::isa($$ret3{"a struct"}{pp},"DataType_Type") &&
+    $$ret3{"a struct"}{pp}->stringify eq "UInteger_Type",
+    "  and 'a struct' contents are okay" );
 
-## perl 2 S-Lang
+# and send it back to S-Lang
+ok( check_assoc2( $ret1, $ret2, $ret3 ), "And can convert stuff back to S-Lang" );
 
-TODO: {
-    todo_skip "Unable to convert assoc arrays to perl", 1;
+$ret1 = assocarray_array();
+print "Assoc array:\n" . Dumper($ret1), "\n";
+is( ref($ret1), "Assoc_Type", "Assoc_Array [Array_Type] converted to Assoc_Type" );
+is( $ret1->_typeof->stringify, "Array_Type", "  and contents are Array_Type" );
+ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+    "   keys for assoc array are okay" );
 
-ok( input_assoc( { aa => 'a a', 23 => 2, "a string" => 2.3 } ),
-    "Can convert an assoc array refrence to S-Lang" );
+ok( eq_array( $$ret1{"a"},   [0,1,2,3] ),
+    '  key   a == [0,1,2,3]' );
+ok( eq_array( $$ret1{"b b"}, [1,2,3,4] ),
+    '  key b b == [1,2,3,4]' );
+ok( eq_array( $$ret1{"1"},   [0.5,1.0,1.5,2.0] ),
+    '  key   1 == [1,2,3,4]/2' );
 
-}
+$ret1 = assocarray_any1();
+print "Assoc array:\n" . Dumper($ret1), "\n";
+is( ref($ret1), "Assoc_Type", "Assoc_Array [] converted to Assoc_Type" );
+is( $ret1->_typeof->stringify, "Any_Type", "  and it contains Any_Type" );
+ok( eq_array( [sort keys %$ret1], [ "1", "a", "b b" ] ),
+    "   keys for assoc array are okay" );
+
+is( $$ret1{"a"},   "aa", '  key   a == "aa"' );
+is( $$ret1{"b b"},  1.2, '  key b b == 1.2' );
+
+ok( eq_array( $$ret1{"1"}, [1,2,3,4] ),
+    '  key   1 == [1,2,3,4]' );
+
+## check conversion of Perl hash references
+#
+# these are shortform for Assoc_Type->new( "Any_Type" );
+#
+
+# this test includes checking the stack handling
+my $href = { aa => 'a a', 23 => 2, "a string" => 2.3 };
+ok( check_hashref( DataType_Type->new(), $href, undef ),
+    "Can convert a hash reference to S-Lang Assoc_Type [Any_Type]" );
+$ret1 = return_hashref($href);
+ok( UNIVERSAL::isa($ret1,"Assoc_Type"), "hash ref to S-Lang to Perl -> Assoc_Type" );
+is( $ret1->_typeof->stringify, "Any_Type", "  and type=Any_Type" );
+
+is( $$ret1{aa}, "a a", "  and field 'aa' eq 'a a'" );
+is( $$ret1{"a string"}, 2.3, "  and field 'a string' == 2.3" );
+is( $$ret1{23}, 2, "  and field 'aa' == 2" );
 
 __END__
-
 __SLang__
 
 %% S-Lang 2 perl: associative arrays
@@ -134,9 +217,7 @@ define assocarray_any1 () {
   variable foo = Assoc_Type [];
   foo["a"]   = "aa";
   foo["b b"] = 1.2;
-% do not handle array of Any_Type variables at the moment
-%  foo["1"]   = [1:4];
-  foo["1"] = NULL;
+  foo["1"]   = [1:4];
   return foo;
 }
 
@@ -155,5 +236,96 @@ define ret_multi() {
   return "a string", foo, 22.4;
 }
 
-define input_assoc(x) { return typeof(x) == Assoc_Type; }
+#ifndef sum
+define sum(x) { variable tot = 0; foreach ( x ) { tot += (); } return tot; }
+#endif
+define all(x) { return sum(x!=0) == length(x); } % assumes 1D
+define any(x) { return sum(x!=0) != 0; } % assumes 1D
+
+define check_assoc2(x,y,z) {
+  % split checks up
+  if ( orelse
+       { typeof(y) != DataType_Type }
+       { y != String_Type }
+       ) return 0;
+  if ( orelse
+       { typeof(x) != Assoc_Type }
+       { typeof(z) != Assoc_Type }
+       ) return 0;
+
+  variable keys = assoc_get_keys(x);
+  variable indx = array_sort(keys);
+  if ( any( keys[indx] != ["any2","uchar"] ) ) return 0;
+  if ( orelse
+       { typeof(x["any2"]) != Assoc_Type }
+       { x["any2"]["a"] != "aa" }
+       { x["any2"]["b b"] != 1.2 }
+       { any( x["any2"]["1"] != [1:4] ) }
+       ) return 0;
+  if ( orelse
+       { typeof(x["uchar"]) != Assoc_Type }
+       { x["uchar"]["a"] != 1 }
+       { x["uchar"]["b b"] != 'x' }
+       { x["uchar"]["1"] != 255 }
+       ) return 0;
+
+  keys = assoc_get_keys(z);
+  indx = array_sort(keys);
+  if ( any( keys[indx] != ["a struct","foo"] ) ) return 0;
+  if ( orelse
+       { typeof(z["a struct"]) != Struct_Type }
+       { any( get_struct_field_names(z["a struct"]) != ["qq","pp"] ) }
+       { z["a struct"].qq != "alpha" }
+       { z["a struct"].pp != UInteger_Type }
+       ) return 0;
+  if ( orelse
+       { typeof(z["foo"]) != Struct_Type }
+       { any( get_struct_field_names(z["foo"]) != ["x1"] ) }
+       { z["foo"].x1 != 2.3 }
+       ) return 0;
+
+  return 1;
+} % check_assoc2
+
+define ret_assoc2() {
+  variable foo = Assoc_Type [Assoc_Type];
+  foo["any2"] = assocarray_any2();
+  foo["uchar"] = assocarray_uchar();
+  variable bar = Assoc_Type [Struct_Type];
+  bar["a struct"] = struct { qq, pp };
+  bar["a struct"].qq = "alpha";
+  bar["a struct"].pp = UInt_Type;
+  bar["foo"] = struct { x1 };
+  bar["foo"].x1 = 2.3;
+
+  return foo, String_Type, bar;
+} % ret_assoc2
+
+define check_hashref(z,x,y) {
+  if ( orelse
+       { typeof(z) != DataType_Type }
+       { z != DataType_Type }
+       ) return 0;
+  if ( y != NULL ) return 0;
+
+  % check in stages
+  % no way to check the assoc_type type being any_type directly
+  if ( typeof(x) != Assoc_Type ) return 0;
+
+  variable keys = assoc_get_keys(x);
+  variable indx = array_sort(keys);
+  if ( any( keys[indx] != ["23","a string","aa"] ) ) return 0;
+  if ( orelse
+       { typeof(x["aa"]) != String_Type }
+       { x["aa"] != "a a" }
+       { typeof(x["a string"]) != Double_Type }
+       { x["a string"] != 2.3 }
+       { typeof(x["23"]) != Integer_Type }
+       { x["23"] != 2 }
+       ) return 0;
+
+  return 1;
+} % check_hashref
+
+define return_hashref(x) { return x; }
 
