@@ -368,6 +368,13 @@ errors can be handled by using Perl's C<eval> statement.
 
 =over 2
 
+=item v0.22 Wed Apr  7 16:29:05 EDT 2004
+
+The build process has been changed to use L<Inline::C> to embed
+C code within F<Makefile.PL>, rather than having it in a separate
+file which we have to compile ourselves. This should hopefully make
+the build process a bit more portable.
+
 =item v0.21 Mon Apr  5 15:15:51 EDT 2004
 
 This release will now build on OS-X machines. The support for
@@ -376,8 +383,6 @@ your system - since it does not work on Linux and OS-X machines.
 
 The main changes are behind the scenes, and involve splitting the
 code up and making a tad more modular.
-
-=over 2
 
 =item v0.20 Wed May 21 00:37:07 EDT 2003
 

@@ -37,7 +37,6 @@ SLang/Config.pod
 SLang/Details.pod
 SLang/Struct.pod
 SLang/Types.pod
-slconfig.c
 t/00init.t
 t/02bind_all.t
 t/02bind_foo.t

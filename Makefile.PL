@@ -5,8 +5,13 @@
 #   be mine and not Neil's
 #
 # Notes:
-#  Have tried to use File::Spec to ensure works across different
-#  filesystems, however:
+#  - we use Inline::C to interface to the S-Lang library (prior to
+#    0.22 we had the code in an external file which we compiled
+#    ourselves). Hence we have to include a check for Inline/Inline::C
+#    at the start of the script.
+#
+#  - Have tried to use File::Spec to ensure works across different
+#    filesystems, however:
 #    a) I don't know the rules for other systems so I can't promise
 #       that I've done things correctly (and they're almost certain
 #       not sensible as I'm reluctant to cash many results)
@@ -17,11 +22,21 @@
 # serious problems on linux and OS-X
 #
 
-eval { require 5.6.0 } or die <<EOD;
+eval { "require 5.6.0" } or die <<EOD;
 ############
 ###
 ### The Inline::SLang module requires at least Perl version v5.6.0.
 ### Please upgrade your Perl before installing this module.
+###
+############
+EOD
+
+eval { "require Inline::C;" } or die <<EOD;
+############
+###
+### The Inline::SLang module requires that Inline::C be installed.
+### It is needed to build the module. You only need the Inline module
+### to use Inline::SLang.
 ###
 ############
 EOD
@@ -37,6 +52,19 @@ use File::Spec; # initial try to allow compilatio on non Unix-like filesystems
 
 ## Internal routines
 
+# we start with the fixed-size types and then
+# the 'standard' types
+#
+my @intypes = qw(
+  Int16_Type UInt16_Type
+  Int32_Type UInt32_Type
+  Int64_Type UInt64_Type
+  Float32_Type Float64_Type 
+  Short_Type UShort_Type
+  Long_Type ULong_Type
+  Int_Type UInt_Type
+);
+
 my %synonyms;
 my %sl_sizes;
 
@@ -44,17 +72,13 @@ my %sl_sizes;
 #  - fills in %synonyms and %sl_sizes arrays
 #  - creates stf.h
 #
-sub parse_slconfig ($) {
-    my $code = shift;
+sub parse_slconfig () {
 
-    my $fh = IO::File->new( "< $code" )
-      or die "Error: unable to read from $code\n";
-    while ( <$fh> ) {
-	chomp;
-	my ( $dummy, $synonym, $base ) = split;
-	$synonyms{$synonym} = $base;
+    foreach my $in ( @intypes ) {
+	my $out = sl_type_conversion( $in );
+	next unless defined $out and $in ne $out;
+	$synonyms{$in} = $out;
     }
-    $fh->close;
 
     # Convert this to code used by _sl_defined_types in SLang.xs
     # - what a lovely mess I'm making
@@ -66,7 +90,7 @@ sub parse_slconfig ($) {
     unlink $cfrag if -e $cfrag;
     die "Error: Unable to remove $cfrag\n" if -e $cfrag;
 
-    $fh = IO::File->new( "> $cfrag" )
+    my $fh = IO::File->new( "> $cfrag" )
       or die "Error: Unable to create $cfrag\n";
     while ( my ( $synonym, $base ) = each %synonyms ) {
 	unless ( exists $sl_sizes{$base} ) {
@@ -179,6 +203,7 @@ EON
   #
   # the following bit of code delves into the internals somewhat
   # - so is a bit dangerous - and requires a recent PDL (2.4.0)
+  #
   require PDL::Types;
   my %pdl_sizes;
   foreach my $ptype ( PDL::Types::typesrtkeys() ) {
@@ -243,6 +268,7 @@ EON
 
   # Convert this to code used by sl2pl_array_pdl in sl2pl.c
   # - what a lovely mess I'm making
+  #
   my $cfrag = "topdl.h";
   unlink $cfrag if -e $cfrag;
   die "Error: Unable to remove $cfrag\n" if -e $cfrag;
@@ -326,7 +352,7 @@ if ( defined $ENV{"ASCDS_INSTALL"} ) {
       if $#words == -1;
 
     # if pre v3.0 then we do not add it to the directory list
-    my $major = (split /\./, $words[1])[0];
+    my $major = (split /\./, $words[1])[0];   # / # - to make emacs happy
     if ( $major > 2 ) {
 
       # assume that the location hasn't changed from 3.0
@@ -436,58 +462,156 @@ my $libpath = "-L$slanglib -lslang";
 # although the code could be updated to make such support
 # optional (I don't have the time/interest)
 #
-# format taken from trylink subroutine in PDL/Core/Dev.pm
+
+    my $config_code = <<'EOC';
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "slang.h"
+
+#define NCHECKS 2
+static char *inchecks[NCHECKS] = {
+  "Float_Type", "Complex_Type"
+};
+
+/* stop loads of messages to the screen */
+static void _sl_error_handler( char *emsg ) { return; }
+
+/*
+ * Note:
+ *   I am not too bothered about memory loses here, since these are
+ *   one-shot routines (i.e. called only once)
+ */
+
+/*
+ * checks that the version of the S-Lang library installed on the
+ * system meets the needs of Inline::SLang
+ *   a) version check
+ *   b) a check that we can use the import functionality of S-Lang
+ *      this is not strictly required, but I need this so I include
+ *      it for now
+ *   c) includes support for floating-point and complex numbers
+ *
+ * Returns the value 0 on success, otherwise a
+ * text string describing the problem
+ */
+void init_checks( int minver ) {
+
+  static char slstring[30];
+  int i;
+
+  /* set up the stack ready for returning values */
+  Inline_Stack_Vars;
+  Inline_Stack_Reset;
+
+  /*
+   * could check against SLANG_VERSION from slang.h
+   * but am having "fun" with this approach on my gentoo box, so
+   * we use the version from the library itself
+   */
+  if ( minver > SLang_Version ) {
+    Inline_Stack_Push(
+      newSVpvf(
+        "ERROR: S-Lang version (%d) is less than the minimum rquired for Inline::SLang (%d)",
+	SLang_Version, minver
+      )
+    );
+    Inline_Stack_Done;
+    return;
+  }
+
+  /*
+   * initialise the S-Lang interpreter. This is needed since we use
+   * the SLang_load_string() routine in both this and
+   * sl_type_conversion().
+   *
+   * We check we can initialise the support for the import command.
+   * This is not strictly necessary.
+   */
+  if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) ) {
+    Inline_Stack_Push(
+      newSVpv( "ERROR: Unable to initialize the S-Lang library.", 0 )
+    );
+    Inline_Stack_Done;
+    return;
+  }
+
+  /* install an error handler */
+  SLang_Error_Hook = _sl_error_handler;
+
+  /* does S-Lang support for floats and complex numbers ? */
+  for ( i = 0; i < NCHECKS; i++ ) {
+    sprintf( slstring, "%s;", inchecks[i] );
+    if ( -1 == SLang_load_string( slstring ) ) {
+      Inline_Stack_Push(
+        newSVpvf(
+	  "ERROR: Your S-Lang library does not support %s type variables.",
+	  inchecks[i]
+        )
+      );
+      Inline_Stack_Done;
+      return;
+    }
+  }  /* for: i < NCHECKS */
+
+  /* if we have got this far then we have success, so return 0 */
+  Inline_Stack_Push( newSViv(0) );
+  Inline_Stack_Done;
+
+} /* init_checks */
+
+/*
+ * find out the type conversions for the S-Lang
+ * data types. Returns a string or NULL if the
+ * type is not recognised.
+ */
+void sl_type_conversion( char *intype ) {
+
+  static char slstring[30];
+  char *outtype;
+
+  /* set up the stack ready for returning values */
+  Inline_Stack_Vars;
+  Inline_Stack_Reset;
+
+  sprintf( slstring, "string(%s);", intype );
+  if ( -1 != SLang_load_string( slstring ) ) {
+    (void) SLang_pop_slstring( &outtype );
+    Inline_Stack_Push( newSVpv( outtype, 0 ) );
+    SLang_free_slstring( outtype );
+
+  } else {
+    SLang_restart(1);
+    SLang_Error = 0;
+    Inline_Stack_Push( &PL_sv_undef );
+  }
+
+  Inline_Stack_Done;
+
+} /* sl_type_conversion() */
+EOC
+
 #
-# Since we have Inline available this could have been done as
-# an embedded bit of C code. I may move to this approach rather than
-# try and roll-my-own compilation.
+# I would have preferred to put the C code at the end of the file
+# BUT we do not know the library/include file location until
+# this point, which means we can not just say 'use Inline C...'
+# but have to go this route.
 #
-my $in  = "slconfig.c";
-my $out = "slconfig";
-
-my $cc = $Config{cc} ||
-  die "Err: can not find name of C compiler used to create Perl!\n";
-my $exe = $Config{_exe};
-$out .= $exe;
-
-unlink $out if -e $out;
-die "Error: Unable to delete $out\n" if -e $out;
-
-# doesn't seem to want to work with a list input (or rather I'm
-# making a stupid mistake)
+# An alternative would have been to do everything in BEGIN blocks,
+# but that would have required more substantial changes to the
+# code
 #
-# we add '-bind_at_load' to stop warnings on OS-X
-# (do we need to be more careful about the check for adding this?)
-# '-ldl -lm' is added on solaris machines since some users
-# seem to need it
-#
-my %os_opts =
-  (
-   "darwin" => " -bind_at_load",
-   "solaris" => " -ldl -lm",  # when is this needed
-);
-system(
-       "$cc -o $out $in $incpath $libpath" .
-       ( exists $os_opts{$^O} ? $os_opts{$^O} : "" )
-      ) and
-  die "Error: Unable to compile a test program using\n" .
-      "       $incpath $libpath\n";
-die "Error: did not create $out from $in\n"
-  unless -e $out;
+eval( 
+    "use Inline C => Config => INC => '$incpath' => LIBS => '$libpath';
+     Inline->bind( C => '$config_code' );"
+) or die "Error whilst using Inline::C to build the configuration code:\n $@\n";
 
-my $code = "slconfig.dat";
-unlink $code if -e $code;
-die "Error: Unable to delete $code\n" if -e $code;
+my $retval = init_checks( 10407 );
+die "$retval\n" unless $retval eq "0";
 
-my $minver = "10407";
-system( "./$out $minver" ); # this is ***UNIX SPECIFIC***
-my $run = $? >> 8;
-die "\nError: Unable to run '$out $minver' - error code = [$run]\n"
-  if $run;
-die "\nError: '$out $minver' did not create '$code'\n"
-  unless -e $code;
-
-parse_slconfig $code;
+parse_slconfig;
 
 #============================================================================
 # PDL support
@@ -522,7 +646,7 @@ WriteMakefile(
     realclean		=> {
 			    # _Inline is a directory *NOT* a file,
 			    # how can we tell 'realclean' this?
-			    FILES => '_Inline ' . $out . ' slconfig.dat stf.h'
+			    FILES => '_Inline stf.h'
 			    . ( $pdl ? ' topdl.h toslang.h' : '') },
     ABSTRACT_FROM       => 'SLang.pod',
     AUTHOR              => 'Doug Burke <djburke@cpan.org>',

@@ -38,10 +38,6 @@ Other data types
 Configuration
 -------------
 
-- we could use Inline::C to embed the code currently in slconfig.c
-  into Makefile.PL. This may avoid re-inventing the wheel with regard
-  to the 'how do I compile this C code on a particular OS' question.
-
 - do we need a way to say 'bind all the functions EXCEPT the following'?
   see comments in the S-Lang section of t/12arrays2slang_pdl.t
 
@@ -83,7 +79,8 @@ General
     going to clash with Perl 6
   So *very unlikely* to do
 
-- improve documentation
+- improve documentation (e.g. add information to
+  Inline::SLang::Details).
 
 Variables:
  - do we want to allow access to S-Lang variables (ie have them

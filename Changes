@@ -1,6 +1,22 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.22
+date:    Wed Apr  7 16:29:05 EDT 2004
+changes:
+
+- This is a minor release over 0.21.
+
+- The major change is in the details of the build process: we now use
+  Inline::C to embed the C code - which is used to interrogate the
+  S-Lang interpreter - within Makefile.PL rather than having it in a
+  separate file (slfconfig.c) which we have to compile ourselves. This
+  should make the build process more portable.
+
+- One really minor documentation fix to the "CHANGES" section of
+  Inline::SLang.
+
+--
 version: 0.21
 date:    Mon Apr  5 15:15:51 EDT 2004
 changes:
