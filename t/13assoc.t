@@ -334,11 +334,12 @@ define ret_multi() {
   return "a string", foo, 22.4;
 }
 
-#ifndef sum
-define sum(x) { variable tot = 0; foreach ( x ) { tot += (); } return tot; }
-#endif
-define all(x) { return sum(x!=0) == length(x); } % assumes 1D
-define any(x) { return sum(x!=0) != 0; } % assumes 1D
+%
+% As of version 0.26 of Inline::SLang we guarantee that
+% sum is part of the S-Lang tun-time library
+%
+define all(x) { return sum(typecast(x,Int_Type)!=0) == length(x); }
+define any(x) { return sum(typecast(x,Int_Type)!=0) != 0; }
 
 define check_assoc2(x,y,z) {
   % split checks up

@@ -396,17 +396,13 @@ __SLang__
 %% anyway]. unfortunately we do not (as yet) have a way of saying
 %% "bind everything except for these functions".
 %%
-#ifndef sum
-define sum(x) { variable tot = 0; foreach ( x ) { tot += (); } return tot; }
-#endif
-define all(x) {
-  variable dims, ndims, nelem;
-  ( dims, ndims, ) = array_info(x);
-  nelem = 1;
-  foreach ( dims ) { variable y = (); nelem *= y; }
-  return sum(x!=0) == nelem;
-}
-define any(x) { return sum(x!=0) != 0; }
+
+%
+% As of version 0.26 of Inline::SLang we guarantee that
+% sum is part of the S-Lang tun-time library
+%
+define all(x) { return sum(typecast(x,Int_Type)!=0) == length(x); }
+define any(x) { return sum(typecast(x,Int_Type)!=0) != 0; }
 
 define isa_array(a,dims,type) {
     if (

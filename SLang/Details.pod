@@ -5,7 +5,7 @@ Inline::SLang::Details - How Inline::SLang works
 =head1 DESCRIPTION
 
  #
- # This document was added in versino 0.21 of Inline::SLang and
+ # This document was added in version 0.21 of Inline::SLang and
  # is not complete
  #
 
@@ -40,25 +40,27 @@ namespaces are again queried for the names of defined functions.
 We also pick up any new namespaces that may have been 
 defined if the C<BIND_NS> option is set to C<All>.
 
-The names of the new functions (at least those for which the S-Lang
-function C<_apropos()> reports when called with a flag value of 3) are
+The names of the new functions - i.e. those functions added by the
+user-supplied S-Lang code which the S-Lang
+function C<_apropos()>, using a flag value of 3, lists - are
 stored for later use.
 
 Complications are:
 
-=over 4
+=over 2
 
-=item a
+=item *
 
 The "_inline" namespace is ignored since this is used by the
 module and should be considered off-limits.
 
-=item b
+=item *
 
-The list of functions in bind_slfuncs is added to the list
-of functions to bind.
+The list of functions in C<bind_slfuncs> is added to the list
+of functions to bind. This list can include functions defined as
+part of the S-Lang Run-Time Library.
 
-=item c
+=item *
 
 The fact that the module allows users to change the name
 that namespaces and (some) functions have when mapped to Perl.

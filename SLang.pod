@@ -278,10 +278,21 @@ and converts any return values to Perl.
 In general this will not be needed,
 since you can always call S-Lang's C<eval()> function
 via a wrapper function (or by binding it to a different
-function name in Perl).
+function name in Perl). One approach is shown in the last
+example below. 
 
-=head4 Example:
+One time it can come in useful is to access a S-Lang variable
+(either to set its value or store its value in a Perl variable).
 
+=head4 Examples:
+
+  # get the version of the S-Lang library
+  my $sl_ver = Inline::SLang::sl_eval( "_slang_version" );
+
+  # set a variable in S-Lang scope (assuming 'this_var exists')
+  Inline::SLang::sl_eval( "this_var = 23.5" );
+
+  # evaluate arbitraty S-Lang code
   my $foo = Inline::SLang::sl_eval("23+4");
   print "S-Lang thinks 23+4 is $foo\n";
 
@@ -367,6 +378,14 @@ errors can be handled by using Perl's C<eval> statement.
 =head1 CHANGES
 
 =over 2
+
+=item v0.26 Fri Apr 16 00:07:13 EDT 2004
+
+Fixed a bug which caused t/11type_synonyms.t to fail on some machines.
+
+The S-Lang interpreter is now initialised with the min, max, sum and
+cumsum functions as part of the S-Lang run-time library (cumsum is
+only available if you have v1.4.9 of S-Lang).
 
 =item v0.25 Tue Apr 13 22:56:06 EDT 2004
 

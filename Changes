@@ -1,6 +1,24 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.26
+date:    Fri Apr 16 00:07:13 EDT 2004
+changes:
+
+- Fixed bug in datatype initialisation introduced in the 0.22 version
+  of the code that manifested itself by failures in the test
+  t/11type_synonyms.t
+
+- The SLang_init_array_extra() routine is called when the S-Lang
+  interpreter is initialised. This adds the sum, min, max functions
+  (and cumsum for version 1.4.9) to the S-Lang run-time library.
+  Updated tests to remove my own version of sum. This change is
+  needed to allow importing of the ChIPS and Sherpa modules
+  from CIAO 3.1.
+
+- Minor updates to README to match recent changes.
+
+--
 version: 0.25
 date:    Tue Apr 13 22:56:06 EDT 2004
 changes:

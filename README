@@ -15,9 +15,6 @@
 ***     be loaded every time Inline::SLang is loaded. This may
 ***     be changed.
 ***
-***   The PDL support does not work on Linux and OS-X systems, so it
-***   has been turned off by default.
-***
 
 INTRODUCTION
 
@@ -59,7 +56,6 @@ Perl requirements (see CPAN at http://search.cpan.org/):
   Test::More module (comes with perl 5.8.0)
   Inline module version 0.42 or higher.
   PDL v2.4.0 or higher will be used if installed
-    [note that this version is 'nearly' released to CPAN]
 
 S-Lang requirements:
   Version 1.4.7 or higher of the S-Lang library.

@@ -91,10 +91,9 @@ sub parse_slconfig () {
     while ( my ( $synonym, $base ) = each %synonyms ) {
 	unless ( exists $sl_sizes{$base} ) {
 	    my $size = $synonym;
-	    $size =~ s/[^\d]+//g;
-	    next unless $size;
-	    ##print "size: synonym $synonym -> $size\n";
-	    $sl_sizes{$base} = $size / 8;
+	    $size =~ s/[^\d]+//;
+	    $sl_sizes{$base} = $size / 8
+	      if $size;
 	}
 
 	my $len = length($synonym);
@@ -165,7 +164,7 @@ EOW
 
 PLEASE NOTE:
   Found PDL >= 2.4.0 but I should warn you that ...
-  PDL support is currently experimental. As of 0.25 of Inline::SLang
+  PDL support is currently experimental. As of 0.26 of Inline::SLang
   1D arrays/piddles convert okay on 32-bit machines (no testing done on
   64-bit machines). 2D - and higher - arrays/piddles will be converted
   *BUT* are unlikely to do what you expect. 0D piddles just croak.
@@ -523,10 +522,16 @@ void init_checks( int minver ) {
    * the SLang_load_string() routine in both this and
    * sl_type_conversion().
    *
-   * We check we can initialise the support for the import command.
-   * This is not strictly necessary.
+   * We check we can initialise the support for the import command
+   * and the init_array_extra routines. These are not necessary for
+   * this bit of code, but this is how we will start up the S-Lang
+   * interpreter when Inline::SLang is being used, so this acts as
+   * a good test. The SLang_init_array_extra() routine was added in
+   * version 1.4.7 of S-Lang.
    */
-  if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) ) {
+  if( (-1 == SLang_init_all()) ||
+      (-1 == SLang_init_array_extra()) ||
+      (-1 == SLang_init_import()) ) {
     Inline_Stack_Push(
       newSVpv( "ERROR: Unable to initialize the S-Lang library.", 0 )
     );

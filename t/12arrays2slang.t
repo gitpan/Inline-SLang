@@ -406,17 +406,15 @@ is( sumup_nelems( [0], [ ["a", "b"], ["cc", "d"] ], [3.4, 5.6, 9.4, 55] ),
 __END__
 __SLang__
 
-#ifndef sum
-define sum(x) { variable tot = 0; foreach ( x ) { tot += (); } return tot; }
-#endif
-define all(x) {
-  variable dims, ndims, nelem;
-  ( dims, ndims, ) = array_info(x);
-  nelem = 1;
-  foreach ( dims ) { variable y = (); nelem *= y; }
-  return sum(x!=0) == nelem; 
-}
-define any(x) { return sum(x!=0) != 0; }
+define debug (x) { }
+define debug (x) { vmessage( "@@@ dbg: %S", x ); }
+
+%
+% As of version 0.26 of Inline::SLang we guarantee that
+% sum is part of the S-Lang tun-time library
+%
+define all(x) { return sum(typecast(x,Int_Type)!=0) == length(x); }
+define any(x) { return sum(typecast(x,Int_Type)!=0) != 0; }
 
 %% Convert perl to S-Lang
 
@@ -538,8 +536,8 @@ define check_multiref(x,y,z) {
        { typeof(z)  != Array_Type }
        { _typeof(z) != Integer_Type }
      ) return 0;
-  if ( sum( any( x != [1.1,2.2,-43.2] ) ) ) return 0;
-  if ( sum( any( y != ["a string", "another one", "fooble"] ) ) ) return 0;
+  if ( any( x != [1.1,2.2,-43.2] ) ) return 0;
+  if ( any( y != ["a string", "another one", "fooble"] ) ) return 0;
 
   variable dims, ndims;
   ( dims, ndims, ) = array_info( z );
@@ -550,7 +548,7 @@ define check_multiref(x,y,z) {
   variable zz = Integer_Type [2,2];
   zz[0,*] = [0,1];
   zz[1,*] = [4,3];
-  if ( sum( any( z != zz ) ) ) return 0;
+  if ( any( z != zz ) ) return 0;
 
   return 1;
 }

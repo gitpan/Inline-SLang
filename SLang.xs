@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * $Id: SLang.xs,v 1.28 2003/08/24 00:23:30 dburke Exp $
+ * $Id: SLang.xs,v 1.30 2004/04/16 04:11:27 dburke Exp $
  *
  * SLang.xs
  *   Inline::SLang method bindings.
@@ -100,8 +100,15 @@ BOOT:
     SLang_NameSpace_Type *ns;
 
     Printf( ( "In Perl's BOOT section\n" ) );
-    /* want to allow dynamic linking, hence _init_import() is required */
-    if( (-1 == SLang_init_all()) || (-1 == SLang_init_import()) )
+
+    /*
+     * want to allow dynamic linking, hence _init_import() is required
+     * and for my needs I want the extra array routines provided by
+     * the _init_array_extra routines
+     */
+    if( (-1 == SLang_init_all()) ||
+	(-1 == SLang_init_array_extra()) ||
+	(-1 == SLang_init_import()) )
       croak("Internal error: unable to initialize the S-Lang library\n");
     /* set up error hook */
     SLang_Error_Hook = _sl_error_handler;
@@ -220,6 +227,10 @@ _sl_defined_types( )
     } /* for: i */
 
     /* add in the type synonyms */
+    /*** NOTE: are we over-writing info here ??
+     ***   [or do the synonymns not have a class]  
+     ***   {is everything in stf.h a synonyn?}
+     ***/
 #include "stf.h"
 
     /* return the associative array reference */
