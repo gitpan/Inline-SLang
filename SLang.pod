@@ -361,12 +361,17 @@ in the S-Lang interpreter - such as calling a function that expects
 an argument with none - then the S-Lang error is transformed into
 a Perl error (as a call to C<croak>) and the S-Lang interpreter
 is restarted.
-This means that such
+This means that these
 errors can be handled by using Perl's C<eval> statement.
 
 =head1 CHANGES
 
 =over 2
+
+=item v0.23 Wed Apr  7 21:32:07 EDT 2004
+
+This is a bug-fix for C<make test> in version 0.22, which failed on
+systems which did not already have C<Inline::SLang> installed.
 
 =item v0.22 Wed Apr  7 16:29:05 EDT 2004
 

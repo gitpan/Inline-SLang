@@ -1,6 +1,14 @@
 # Revision history for Inline::SLang
 
 --
+version: 0.23
+date:    Wed Apr  7 21:32:07 EDT 2004
+changes:
+
+- This is a fix to 'make test' in version 0.22, which failed on systems
+  which did not already have a version of Inline::SLang installed.
+
+--
 version: 0.22
 date:    Wed Apr  7 16:29:05 EDT 2004
 changes:

@@ -613,6 +613,29 @@ die "$retval\n" unless $retval eq "0";
 
 parse_slconfig;
 
+#
+# HACK
+#
+# We do not use any more functions bound by Inline::C, so we can now
+# delete the config file to allow the tests to work
+# This is ugly - is there a better way (have emailed the inline list
+# about it)?
+#
+my $inline_dir = Inline::find_temp_dir();
+die "Error: Inline::find_temp_dir() returned nothing\n"
+    unless defined $inline_dir;
+die "Error: Inline::find_temp_dir() returned a directory that does not exist:\n" .
+    " -> $inline_dir\n\n"
+    unless -d $inline_dir;
+my $config_file = File::Spec->catfile( $inline_dir, "config" );
+die "Error: unable to find the config file - expected it to be:\n" .
+    " -< $config_file\n\n"
+    unless -e $config_file;
+unlink( $config_file )
+    or die "Error: unable to delet Inline config file:\n" .
+    " -> $config_file\n\n";
+
+
 #============================================================================
 # PDL support
 #============================================================================
